@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X } from 'lucide-react';
