@@ -1,4 +1,3 @@
-// Partie 1 - Imports, interfaces et initialisation du composant
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -41,6 +40,13 @@ interface EditingActions {
   index: number;
 }
 
+interface RenderProps {
+  HEADER_HEIGHT: number;
+  task: string[];
+  groupBy: string;
+  labelIndex: number;
+}
+
 const CSVViewer: React.FC = () => {
   // États avec typage
   const [data, setData] = useState<string[][]>([]);
@@ -70,7 +76,7 @@ const CSVViewer: React.FC = () => {
   }, []);
 
   // Fonctions utilitaires de base
-  const isSameDay = (date1: string, date2: string) => {
+  const isSameDay = (date1: string, date2: string): boolean => {
     const d1 = new Date(date1);
     const d2 = new Date(date2);
     return d1.getFullYear() === d2.getFullYear() &&
@@ -98,443 +104,452 @@ const CSVViewer: React.FC = () => {
       return 0;
     }
   };
-  // Partie 2 - Gestion des fichiers et traitement des données
-const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
+  // Partie 2 - Gestion des fichiers et données
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  parse(file, {
-    complete: (results: CSVResult) => {
-      const processedData = results.data.slice(1)
-        .filter((row: string[]) => row.some(cell => cell))
-        .map((row: string[]) => {
-          const updatedRow = [...row];
-          updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
+    parse(file, {
+      complete: (results: CSVResult) => {
+        const processedData = results.data.slice(1)
+          .filter((row: string[]) => row.some(cell => cell))
+          .map((row: string[]) => {
+            const updatedRow = [...row];
+            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
 
-          if (updatedRow[2] && updatedRow[4]) {
-            const startDate = new Date(updatedRow[2]);
-            const endDate = new Date(updatedRow[4]);
-            updatedRow[2] = startDate.toISOString().split('T')[0];
-            updatedRow[4] = endDate.toISOString().split('T')[0];
+            if (updatedRow[2] && updatedRow[4]) {
+              const startDate = new Date(updatedRow[2]);
+              const endDate = new Date(updatedRow[4]);
+              updatedRow[2] = startDate.toISOString().split('T')[0];
+              updatedRow[4] = endDate.toISOString().split('T')[0];
+            }
+            return updatedRow;
+          });
+
+        setData(processedData);
+        setHeaders(results.data[0]);
+
+        // Utilisation de Set pour les dates et techniciens uniques
+        const allDatesSet = new Set<string>();
+        const technicianSet = new Set<string>();
+
+        processedData.forEach((row: string[]) => {
+          if (row[2] && row[4]) {
+            const startDate = new Date(row[2]);
+            const endDate = new Date(row[4]);
+
+            for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+              allDatesSet.add(date.toISOString().split('T')[0]);
+            }
           }
-          return updatedRow;
+          if (row[15]) {
+            technicianSet.add(row[15].trim());
+          }
         });
 
-      setData(processedData);
-      setHeaders(results.data[0]);
+        // Conversion des Sets en Arrays avec Array.from()
+        const sortedDates = Array.from(allDatesSet)
+          .filter(date => date)
+          .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
-      const allDates = new Set<string>();
-      const technicianSet = new Set<string>();
+        const sortedTechnicians = Array.from(technicianSet)
+          .filter(tech => tech && tech !== "Sans technicien")
+          .sort((a, b) => a.localeCompare(b));
 
-      processedData.forEach((row: string[]) => {
-        if (row[2] && row[4]) {
-          const startDate = new Date(row[2]);
-          const endDate = new Date(row[4]);
+        if (technicianSet.has("Sans technicien")) {
+          sortedTechnicians.push("Sans technicien");
+        }
 
-          for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-            allDates.add(date.toISOString().split('T')[0]);
+        setUniqueDates(sortedDates);
+        setAllTechnicians(sortedTechnicians);
+
+        const initialFilters: Record<string, string> = {};
+        results.data[0].forEach(header => {
+          initialFilters[header] = '';
+        });
+        setFilters(initialFilters);
+      },
+      error: (error: Error) => {
+        console.error('Erreur lors de la lecture du fichier:', error);
+      }
+    });
+  };
+
+  const downloadCSV = (content: string, fileName: string): void => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = (): void => {
+    const dataToExport = isFiltering ? filteredData : data;
+    const csv = unparse({
+      fields: headers,
+      data: dataToExport
+    });
+    const fileName = `export_${new Date().toISOString().split('T')[0]}.csv`;
+    downloadCSV(csv, fileName);
+  };
+
+  const handleFilterChange = (header: string, value: string): void => {
+    setFilters(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  };
+
+  const handleAddTechnician = (): void => {
+    const trimmedTechnician = newTechnician.trim();
+    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
+      setAllTechnicians(prev => {
+        if (prev.includes(trimmedTechnician)) {
+          return prev;
+        }
+        const technicians = prev.filter(tech => tech !== "Sans technicien");
+        technicians.push(trimmedTechnician);
+        technicians.sort((a, b) => a.localeCompare(b));
+        if (prev.includes("Sans technicien")) {
+          technicians.push("Sans technicien");
+        }
+        return technicians;
+      });
+      setNewTechnician('');
+    }
+  };
+
+  const filteredData = data.filter(row => {
+    return headers.every((header, index) => {
+      const filterValue = (filters[header] || '').toLowerCase();
+      const cellValue = (row[index] || '').toString().toLowerCase();
+      return !filterValue || cellValue.includes(filterValue);
+    });
+  });
+
+  const filterDataForDate = useCallback((dateStr: string): string[][] => {
+    if (!dateStr || !data.length) return [];
+
+    try {
+      const dateObj = new Date(dateStr);
+      dateObj.setHours(0, 0, 0, 0);
+
+      return data
+        .filter((row: string[]) => {
+          if (!row[2] || !row[4]) return false;
+
+          try {
+            const startDate = new Date(row[2]);
+            startDate.setHours(0, 0, 0, 0);
+            const endDate = new Date(row[4]);
+            endDate.setHours(23, 59, 59, 999);
+            return startDate <= dateObj && dateObj <= endDate;
+          } catch (err) {
+            console.error('Erreur lors du filtrage des dates:', err);
+            return false;
+          }
+        })
+        .map(row => {
+          const adjustedRow = [...row];
+          const startDate = new Date(adjustedRow[2]);
+          const endDate = new Date(adjustedRow[4]);
+          const currentDate = new Date(dateStr);
+
+          if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
+            adjustedRow[3] = '00:00';
+          }
+          if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
+            adjustedRow[5] = '23:59';
+          }
+
+          return adjustedRow;
+        });
+    } catch (err) {
+      console.error('Erreur lors du filtrage des données:', err);
+      return [];
+    }
+  }, [data, isSameDay]);
+  // Partie 3 - Gestion de l'édition et du groupement
+
+  const handleEditClick = (row: string[]): void => {
+    const operationId = getOperationId(row);
+    setEditingRow(operationId);
+    const rowData: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      rowData[header] = row[index] || '';
+    });
+    setEditedData(rowData);
+  };
+
+  const handleCancelEdit = (): void => {
+    setEditingRow(null);
+    setEditedData({});
+  };
+
+  const handleSaveEdit = (operationId: string): void => {
+    const updatedRow = headers.map(header => editedData[header] || '');
+    setData(prevData => 
+      prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
+    );
+    setEditingRow(null);
+    setEditedData({});
+  };
+
+  const handleInputChange = (header: string, value: string): void => {
+    setEditedData(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  };
+
+  const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): {
+    groups: string[];
+    groupIndex: number;
+    labelIndex: number;
+  } => {
+    let groupIndex: number;
+    let labelIndex: number;
+    let groups: string[] = [];
+
+    switch (groupBy) {
+      case 'Véhicule':
+        groupIndex = 0;
+        labelIndex = 1;
+        // Utilisation de Array.from au lieu du spread operator
+        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+          .filter(Boolean)
+          .sort();
+        break;
+      case 'Lieu':
+        groupIndex = 10;
+        labelIndex = 1;
+        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+          .filter(Boolean)
+          .sort();
+        break;
+      case 'Technicien':
+        groupIndex = 15;
+        labelIndex = 15;
+        groups = allTechnicians;
+        break;
+      default:
+        return { groups: [], groupIndex: 0, labelIndex: 0 };
+    }
+
+    return { groups, groupIndex, labelIndex };
+  }, [allTechnicians]);
+
+  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+    setData(prevData => {
+      return prevData.map(row => {
+        if (getOperationId(row) === operationId) {
+          const newRow = [...row];
+          newRow[15] = newTechnician;
+          return newRow;
+        }
+        return row;
+      });
+    });
+  }, []);
+
+  const detectOverlaps = (tasks: Array<{
+    task: string[];
+    startPercentage: number;
+    duration: number;
+  }>): Map<string, number> => {
+    const sortedTasks = [...tasks].sort((a, b) => {
+      if (a.startPercentage === b.startPercentage) {
+        return (b.startPercentage + b.duration) - (a.startPercentage + a.duration);
+      }
+      return a.startPercentage - b.startPercentage;
+    });
+
+    const overlaps = new Map<string, number>();
+    const timeSlots = new Map<string, string>();
+
+    for (let i = 0; i < sortedTasks.length; i++) {
+      const currentTask = sortedTasks[i];
+      const currentId = getOperationId(currentTask.task);
+      const start = currentTask.startPercentage;
+      const end = start + currentTask.duration;
+
+      let level = 0;
+      let foundSlot = false;
+
+      while (!foundSlot) {
+        foundSlot = true;
+        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+          const timeKey = `${level}_${time}`;
+          if (timeSlots.has(timeKey)) {
+            foundSlot = false;
+            level++;
+            break;
           }
         }
-        if (row[15]) {
-          technicianSet.add(row[15].trim());
-        }
-      });
-
-      const sortedDates = Array.from(allDates)
-        .filter(date => date)
-        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-
-      const sortedTechnicians = Array.from(technicianSet)
-        .filter(tech => tech && tech !== "Sans technicien")
-        .sort((a, b) => a.localeCompare(b));
-
-      if (technicianSet.has("Sans technicien")) {
-        sortedTechnicians.push("Sans technicien");
       }
 
-      setUniqueDates(sortedDates);
-      setAllTechnicians(sortedTechnicians);
-
-      const initialFilters: Record<string, string> = {};
-      results.data[0].forEach(header => {
-        initialFilters[header] = '';
-      });
-      setFilters(initialFilters);
-    },
-    error: (error: Error) => {
-      console.error('Erreur lors de la lecture du fichier:', error);
-    }
-  });
-};
-
-const downloadCSV = (content: string, fileName: string): void => {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
-};
-
-const handleExportCSV = (): void => {
-  const dataToExport = isFiltering ? filteredData : data;
-  const csv = unparse({
-    fields: headers,
-    data: dataToExport
-  });
-  const fileName = `export_${new Date().toISOString().split('T')[0]}.csv`;
-  downloadCSV(csv, fileName);
-};
-
-const handleFilterChange = (header: string, value: string): void => {
-  setFilters(prev => ({
-    ...prev,
-    [header]: value
-  }));
-};
-
-const handleAddTechnician = (): void => {
-  const trimmedTechnician = newTechnician.trim();
-  if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
-    setAllTechnicians(prev => {
-      if (prev.includes(trimmedTechnician)) {
-        return prev;
-      }
-      const technicians = prev.filter(tech => tech !== "Sans technicien");
-      technicians.push(trimmedTechnician);
-      technicians.sort((a, b) => a.localeCompare(b));
-      if (prev.includes("Sans technicien")) {
-        technicians.push("Sans technicien");
-      }
-      return technicians;
-    });
-    setNewTechnician('');
-  }
-};
-
-const filteredData = data.filter(row => {
-  return headers.every((header, index) => {
-    const filterValue = (filters[header] || '').toLowerCase();
-    const cellValue = (row[index] || '').toString().toLowerCase();
-    return !filterValue || cellValue.includes(filterValue);
-  });
-});
-
-const filterDataForDate = useCallback((dateStr: string): string[][] => {
-  if (!dateStr || !data.length) return [];
-
-  try {
-    const dateObj = new Date(dateStr);
-    dateObj.setHours(0, 0, 0, 0);
-
-    return data
-      .filter((row: string[]) => {
-        if (!row[2] || !row[4]) return false;
-
-        try {
-          const startDate = new Date(row[2]);
-          startDate.setHours(0, 0, 0, 0);
-          const endDate = new Date(row[4]);
-          endDate.setHours(23, 59, 59, 999);
-          return startDate <= dateObj && dateObj <= endDate;
-        } catch (err) {
-          console.error('Erreur lors du filtrage des dates:', err);
-          return false;
-        }
-      })
-      .map(row => {
-        const adjustedRow = [...row];
-        const startDate = new Date(adjustedRow[2]);
-        const endDate = new Date(adjustedRow[4]);
-        const currentDate = new Date(dateStr);
-
-        if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
-          adjustedRow[3] = '00:00';
-        }
-        if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
-          adjustedRow[5] = '23:59';
-        }
-
-        return adjustedRow;
-      });
-  } catch (err) {
-    console.error('Erreur lors du filtrage des données:', err);
-    return [];
-  }
-}, [data, isSameDay]);
-// Partie 3 - Gestion de l'édition
-
-const handleEditClick = (row: string[]): void => {
-  const operationId = getOperationId(row);
-  setEditingRow(operationId);
-  const rowData: Record<string, string> = {};
-  headers.forEach((header, index) => {
-    rowData[header] = row[index] || '';
-  });
-  setEditedData(rowData);
-};
-
-const handleCancelEdit = (): void => {
-  setEditingRow(null);
-  setEditedData({});
-};
-
-const handleSaveEdit = (operationId: string): void => {
-  const updatedRow = headers.map(header => editedData[header] || '');
-  setData(prevData => 
-    prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
-  );
-  setEditingRow(null);
-  setEditedData({});
-};
-
-const handleInputChange = (header: string, value: string): void => {
-  setEditedData(prev => ({
-    ...prev,
-    [header]: value
-  }));
-};
-
-const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): {
-  groups: string[];
-  groupIndex: number;
-  labelIndex: number;
-} => {
-  let groupIndex: number;
-  let labelIndex: number;
-  let groups: string[] = [];
-
-  switch (groupBy) {
-    case 'Véhicule':
-      groupIndex = 0;
-      labelIndex = 1;
-      groups = [...new Set(filteredDataForDate.map(row => row[groupIndex]))]
-        .filter(Boolean)
-        .sort();
-      break;
-    case 'Lieu':
-      groupIndex = 10;
-      labelIndex = 1;
-      groups = [...new Set(filteredDataForDate.map(row => row[groupIndex]))]
-        .filter(Boolean)
-        .sort();
-      break;
-    case 'Technicien':
-      groupIndex = 15;
-      labelIndex = 15;
-      groups = allTechnicians;
-      break;
-    default:
-      return { groups: [], groupIndex: 0, labelIndex: 0 };
-  }
-
-  return { groups, groupIndex, labelIndex };
-}, [allTechnicians]);
-
-const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
-  setData(prevData => {
-    return prevData.map(row => {
-      if (getOperationId(row) === operationId) {
-        const newRow = [...row];
-        newRow[15] = newTechnician;
-        return newRow;
-      }
-      return row;
-    });
-  });
-}, []);
-
-const detectOverlaps = (tasks: Array<{
-  task: string[];
-  startPercentage: number;
-  duration: number;
-}>): Map<string, number> => {
-  const sortedTasks = [...tasks].sort((a, b) => {
-    if (a.startPercentage === b.startPercentage) {
-      return (b.startPercentage + b.duration) - (a.startPercentage + a.duration);
-    }
-    return a.startPercentage - b.startPercentage;
-  });
-
-  const overlaps = new Map<string, number>();
-  const timeSlots = new Map<string, string>();
-
-  for (let i = 0; i < sortedTasks.length; i++) {
-    const currentTask = sortedTasks[i];
-    const currentId = getOperationId(currentTask.task);
-    const start = currentTask.startPercentage;
-    const end = start + currentTask.duration;
-
-    let level = 0;
-    let foundSlot = false;
-
-    while (!foundSlot) {
-      foundSlot = true;
       for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-        const timeKey = `${level}_${time}`;
-        if (timeSlots.has(timeKey)) {
-          foundSlot = false;
-          level++;
-          break;
-        }
+        timeSlots.set(`${level}_${time}`, currentId);
       }
+
+      overlaps.set(currentId, level);
     }
 
-    for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-      timeSlots.set(`${level}_${time}`, currentId);
-    }
+    return overlaps;
+  };
 
-    overlaps.set(currentId, level);
-  }
+  const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
+    const operationId = getOperationId(row);
+    const isEditing = editingRow === operationId;
 
-  return overlaps;
-};
-
-const renderCell = (row: string[], cell: string, header: string, index: number) => {
-  const operationId = getOperationId(row);
-  const isEditing = editingRow === operationId;
-
-  if (isEditing) {
-    if (header.toLowerCase().includes('date')) {
+    if (isEditing) {
+      if (header.toLowerCase().includes('date')) {
+        return (
+          <input
+            type="date"
+            value={editedData[header] || ''}
+            onChange={(e) => handleInputChange(header, e.target.value)}
+            className="w-full p-1 border rounded"
+          />
+        );
+      }
       return (
         <input
-          type="date"
+          type="text"
           value={editedData[header] || ''}
           onChange={(e) => handleInputChange(header, e.target.value)}
           className="w-full p-1 border rounded"
         />
       );
     }
-    return (
-      <input
-        type="text"
-        value={editedData[header] || ''}
-        onChange={(e) => handleInputChange(header, e.target.value)}
-        className="w-full p-1 border rounded"
-      />
-    );
-  }
-  return cell || '';
-};
-// Partie 4 - Gestion du drag & drop
+    return cell || '';
+  };
+  // Partie 4 - Gestion du drag & drop
 
-const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
-  e.stopPropagation();
-  const taskData: DraggedTaskData = {
-    ...task,
-    date: selectedDate,
-    operationId: getOperationId(task.task),
-    startDate: task.task[2],
-    endDate: task.task[4],
-    originalTechnician: task.task[15],
-    startPercentage: task.startPercentage,
-    duration: task.duration
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
+    e.stopPropagation();
+    const taskData: DraggedTaskData = {
+      ...task,
+      date: selectedDate,
+      operationId: getOperationId(task.task),
+      startDate: task.task[2],
+      endDate: task.task[4],
+      originalTechnician: task.task[15],
+      startPercentage: task.startPercentage,
+      duration: task.duration
+    };
+
+    setDraggedTask(taskData);
+
+    // Créer un élément fantôme pour le drag
+    const ghostElement = document.createElement('div');
+    ghostElement.style.width = '100px';
+    ghostElement.style.height = '30px';
+    ghostElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    ghostElement.style.position = 'absolute';
+    ghostElement.style.top = '-1000px';
+    document.body.appendChild(ghostElement);
+
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setDragImage(ghostElement, 50, 15);
+
+    // Nettoyage de l'élément fantôme
+    requestAnimationFrame(() => {
+      document.body.removeChild(ghostElement);
+    });
   };
 
-  setDraggedTask(taskData);
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
 
-  // Créer un élément fantôme pour le drag
-  const ghostElement = document.createElement('div');
-  ghostElement.style.width = '100px';
-  ghostElement.style.height = '30px';
-  ghostElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-  ghostElement.style.position = 'absolute';
-  ghostElement.style.top = '-1000px';
-  document.body.appendChild(ghostElement);
+  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropZoneActive(technicianId);
+  }, []);
 
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setDragImage(ghostElement, 50, 15);
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dropZoneActive === technicianId) {
+      setDropZoneActive(null);
+    }
+  }, [dropZoneActive]);
 
-  setTimeout(() => document.body.removeChild(ghostElement), 0);
-};
-
-const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-}, []);
-
-const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
-  e.preventDefault();
-  e.stopPropagation();
-  setDropZoneActive(technicianId);
-}, []);
-
-const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
-  e.preventDefault();
-  e.stopPropagation();
-  if (dropZoneActive === technicianId) {
+  const handleDragEnd = useCallback((): void => {
+    setDraggedTask(null);
     setDropZoneActive(null);
-  }
-}, [dropZoneActive]);
+  }, []);
 
-const handleDragEnd = useCallback((): void => {
-  setDraggedTask(null);
-  setDropZoneActive(null);
-}, []);
+  const handleDrop = useCallback((newTechnician: string, e: React.DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    e.stopPropagation();
 
-const handleDrop = useCallback((newTechnician: string, e: React.DragEvent<HTMLDivElement>): void => {
-  e.preventDefault();
-  e.stopPropagation();
+    if (!draggedTask || !draggedTask.operationId) {
+      setDropZoneActive(null);
+      return;
+    }
 
-  if (!draggedTask || !draggedTask.operationId) return;
+    const { operationId, startDate, endDate, originalTechnician } = draggedTask;
+    const selectedDateObj = new Date(selectedDate);
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
 
-  const { operationId, startDate, endDate, originalTechnician } = draggedTask;
-  const selectedDateObj = new Date(selectedDate);
-  const startDateObj = new Date(startDate);
-  const endDateObj = new Date(endDate);
+    // Vérification des dates
+    if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
+      console.log("Impossible de déplacer une tâche en dehors de sa période");
+      setDropZoneActive(null);
+      setDraggedTask(null);
+      return;
+    }
 
-  // Vérification des dates
-  if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
-    console.log("Impossible de déplacer une tâche en dehors de sa période");
+    // Vérification du technicien
+    if (originalTechnician === newTechnician) {
+      setDropZoneActive(null);
+      return;
+    }
+
+    // Mise à jour de l'assignation
+    updateAssignment(operationId, newTechnician);
     setDropZoneActive(null);
     setDraggedTask(null);
-    return;
-  }
+  }, [draggedTask, selectedDate, updateAssignment]);
 
-  // Vérification du technicien
-  if (originalTechnician === newTechnician) {
-    setDropZoneActive(null);
-    return;
-  }
+  const getDatesRange = (startDate: string, endDate: string): string[] => {
+    const dates: string[] = [];
+    const currentDate = new Date(startDate);
+    const lastDate = new Date(endDate);
 
-  // Mise à jour de l'assignation
-  updateAssignment(operationId, newTechnician);
-  setDropZoneActive(null);
-  setDraggedTask(null);
-}, [draggedTask, selectedDate, updateAssignment]);
+    while (currentDate <= lastDate) {
+      dates.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
 
-const getDatesRange = (startDate: string, endDate: string): string[] => {
-  const dates: string[] = [];
-  const currentDate = new Date(startDate);
-  const lastDate = new Date(endDate);
+    return dates;
+  };
 
-  while (currentDate <= lastDate) {
-    dates.push(currentDate.toISOString().split('T')[0]);
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
+  const getDragMessage = (): React.ReactNode => {
+    if (!draggedTask) return null;
 
-  return dates;
-};
-
-const getDragMessage = (): React.ReactNode => {
-  if (!draggedTask) return null;
-
-  return (
-    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-      {draggedTask.task[2] !== selectedDate ? (
-        <span className="text-red-600">
-          Impossible de déplacer une tâche d'un autre jour ({draggedTask.task[2]})
-        </span>
-      ) : (
-        "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
-      )}
-    </div>
-  );
-};
-// Partie 5 - Composants d'interface
+    return (
+      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+        {draggedTask.task[2] !== selectedDate ? (
+          <span className="text-red-600">
+            Impossible de déplacer une tâche d'un autre jour ({draggedTask.task[2]})
+          </span>
+        ) : (
+          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
+        )}
+      </div>
+    );
+  };
+  // Partie 5 - Composants d'interface
 
 interface RenderTimeHeaderProps {
   HEADER_HEIGHT: number;
