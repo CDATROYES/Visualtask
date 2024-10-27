@@ -5,7 +5,7 @@ import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/client/ui/card';
 
-const CSVViewer: React.FC = () => {
+function CSVViewerComponent() {
   // États (states)
   const [data, setData] = useState<any[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -978,4 +978,5 @@ return (
 };
 
 // Export du composant
-module.exports = CSVViewer;
+const CSVViewer = React.memo(CSVViewerComponent);
+export default CSVViewer;
