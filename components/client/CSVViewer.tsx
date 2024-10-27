@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/client/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 
 function CSVViewerComponent() {
   // États (states)
