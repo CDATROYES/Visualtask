@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X } from 'lucide-react';
 
-const CSVViewer = () => {
+export const CSVViewer: React.FC = () => {
   const [data, setData] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [filters, setFilters] = useState({});
@@ -911,5 +911,6 @@ const CSVViewer = () => {
     </div>
   );
   };
+  export default CSVViewer;
 
   export default CSVViewer;
