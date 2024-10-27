@@ -978,4 +978,4 @@ return (
 };
 
 // Export du composant
-export default CSVViewer;
+module.exports = CSVViewer;
