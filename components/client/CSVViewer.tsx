@@ -1,9 +1,13 @@
 'use client';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/client/ui/card';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/client/ui/card';
 
+interface CSVViewerProps {}
+
+function CSVViewer({}: CSVViewerProps) {
 export const CSVViewer: React.FC = () => {
   const [data, setData] = useState([]);
   const [headers, setHeaders] = useState([]);
@@ -911,6 +915,4 @@ export const CSVViewer: React.FC = () => {
     </div>
   );
   };
-  export default CSVViewer;
-
   export default CSVViewer;
