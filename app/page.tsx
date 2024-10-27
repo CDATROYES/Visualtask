@@ -1,7 +1,13 @@
+'use client';
+
+import { Suspense } from 'react';
 import dynamic from 'next/dynamic'
 
 const CSVViewer = dynamic(
-  () => import('@/components/client/CSVViewer'),
+  async () => {
+    const module = await import('@/components/client/CSVViewer');
+    return module.default;
+  },
   {
     ssr: false,
     loading: () => <div className="p-4">Chargement...</div>
@@ -11,7 +17,9 @@ const CSVViewer = dynamic(
 export default function Page() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <CSVViewer />
+      <Suspense fallback={<div className="p-4">Chargement...</div>}>
+        <CSVViewer />
+      </Suspense>
     </div>
   )
 }
