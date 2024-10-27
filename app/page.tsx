@@ -3,7 +3,10 @@
 import dynamic from 'next/dynamic'
 
 const CSVViewer = dynamic(
-  () => import('@/components/client/CSVViewer'),
+  async () => {
+    const mod = await import('@/components/client/CSVViewer');
+    return mod.default;
+  },
   {
     ssr: false,
     loading: () => <div className="p-4">Chargement...</div>
