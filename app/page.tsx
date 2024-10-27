@@ -1,13 +1,14 @@
-'use client';
-
 import dynamic from 'next/dynamic'
 
-const CSVViewer = dynamic(() => import('@/components/CSVViewer'), { 
-  ssr: false,
-  loading: () => <div>Chargement...</div>
-})
+const CSVViewer = dynamic(
+  () => import('@/components/client/CSVViewer').then((mod) => mod.default),
+  {
+    ssr: false,
+    loading: () => <div className="p-4">Chargement...</div>
+  }
+)
 
-export default function Home() {
+export default function Page() {
   return (
     <main className="min-h-screen bg-gray-50">
       <CSVViewer />
