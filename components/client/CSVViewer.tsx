@@ -134,7 +134,7 @@ const CSVViewer: React.FC = () => {
     });
   };
 
-const handleExportCSV = (): void => {
+const handleExportCSV = () => {
   const dataToExport = isFiltering ? filteredData : data;
   const csv = unparse({
     fields: headers,
@@ -142,20 +142,22 @@ const handleExportCSV = (): void => {
   });
 
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
   
-  try {
-    // Modern way to download files
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `export_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error('Erreur lors de l\'export:', error);
-  }
+  // Configurez le lien
+  link.href = url;
+  link.download = `export_${new Date().toISOString().split('T')[0]}.csv`;
+  
+  // Ajoutez le lien au document
+  document.body.appendChild(link);
+  
+  // Cliquez sur le lien
+  link.click();
+  
+  // Nettoyage
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 };
 
   const handleFilterChange = (header: string, value: string): void => {
