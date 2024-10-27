@@ -10,8 +10,8 @@ const CSVViewer = dynamic(
 
 export default function Page() {
   return (
-    <main className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       <CSVViewer />
-    </main>
+    </div>
   )
 }
