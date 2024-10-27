@@ -1,6 +1,7 @@
+import type { Metadata } from 'next'
 import '@/styles/globals.css'
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'CSV Viewer App',
   description: 'Application de visualisation de fichiers CSV',
 }
