@@ -134,28 +134,29 @@ const CSVViewer: React.FC = () => {
     });
   };
 
-  const handleExportCSV = (): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
-    });
+const handleExportCSV = (): void => {
+  const dataToExport = isFiltering ? filteredData : data;
+  const csv = unparse({
+    fields: headers,
+    data: dataToExport
+  });
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  
+  try {
+    // Modern way to download files
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-
-    if (navigator.msSaveBlob) {
-      navigator.msSaveBlob(blob, 'export.csv');
-    } else {
-      const url = URL.createObjectURL(blob);
-      link.href = url;
-      link.setAttribute('download', `export_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }
-  };
+    link.href = url;
+    link.setAttribute('download', `export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Erreur lors de l\'export:', error);
+  }
+};
 
   const handleFilterChange = (header: string, value: string): void => {
     setFilters(prev => ({
