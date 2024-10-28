@@ -463,14 +463,13 @@ const handleTaskHover = useCallback(
       const rect = event.currentTarget.getBoundingClientRect();
       const scrollY = window.scrollY || window.pageYOffset;
       const scrollX = window.scrollX || window.pageXOffset;
-      
-      // Calcul de la position optimale pour le tooltip
-      let x = rect.left + scrollX;
-      let y = rect.bottom + scrollY + 5; // 5px de marge
 
-      // Éviter que le tooltip ne sorte de l'écran
-      const tooltipWidth = 300; // Largeur approximative du tooltip
-      const tooltipHeight = 200; // Hauteur approximative du tooltip
+      let x = rect.left + scrollX;
+      let y = rect.bottom + scrollY + 5;
+
+      // Ajuster la position si le tooltip sort de l'écran
+      const tooltipWidth = 300;
+      const tooltipHeight = 200;
 
       if (x + tooltipWidth > window.innerWidth + scrollX) {
         x = window.innerWidth + scrollX - tooltipWidth - 10;
@@ -667,14 +666,14 @@ const Tooltip: React.FC<{ data: TooltipData }> = ({ data }) => {
 
   return (
     <div
-      className="fixed z-50 bg-gray-900/95 text-white p-4 rounded-lg shadow-xl text-sm"
+      className="fixed z-[9999] bg-gray-900/95 text-white p-4 rounded-lg shadow-xl text-sm"
       style={{
         left: `${data.x}px`,
         top: `${data.y}px`,
         maxWidth: '400px',
         backdropFilter: 'blur(8px)',
         border: '1px solid rgba(255, 255, 255, 0.1)',
-        pointerEvents: 'none' // Important : permet au hover de continuer à fonctionner
+        pointerEvents: 'none'
       }}
     >
       <div className="grid gap-2">
@@ -1026,42 +1025,45 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
               {tasks.map((taskData) => {
                 const verticalPosition = overlaps.get(taskData.operationId) || 0;
                 const isDragging = isTaskBeingDragged(taskData.operationId);
-                
+  
                 return (
                   <div
                     key={`${taskData.operationId}_${selectedDate}`}
                     draggable={groupBy === 'Technicien'}
                     onDragStart={(e) => handleDragStart(e, taskData)}
                     onDragEnd={handleDragEnd}
-                    onMouseEnter={(e) => handleTaskHover(e, taskData, true)}
-                    onMouseLeave={(e) => handleTaskHover(e, taskData, false)}
-                    style={{
-                      position: 'absolute',
-                      left: `${taskData.startPercentage}%`,
-                      width: `${taskData.duration}%`,
-                      height: `${TASK_HEIGHT}px`,
-                      top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                      backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
-                      borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                      opacity: isDragging ? 0.5 : 1,
-                      cursor: groupBy === 'Technicien' ? 'grab' : 'pointer',
-                      zIndex: tooltip.visible && getOperationId(taskData.task) === getOperationId(taskData.task) ? 2 : 1
-                    }}
-                    className={`
-                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap
-                      transition-all duration-200 hover:ring-2 hover:ring-white
-                      hover:shadow-lg hover:z-10
-                    `}
-                  >
-                    {renderGanttTaskContent({
-                      task: taskData.task,
-                      groupBy,
-                      labelIndex
-                    })}
-                  </div>
-                );
-              })}
+                    onMouseEnter={(e) => {
+                      e.stopPropagation(); // Empêcher la propagation de l'événement
+                      handleTaskHover(e, taskData, true);
+                  }}
+                  onMouseLeave={(e) => {
+                    e.stopPropagation(); // Empêcher la propagation de l'événement
+                    handleTaskHover(e, taskData, false);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: `${taskData.startPercentage}%`,
+                    width: `${taskData.duration}%`,
+                    height: `${TASK_HEIGHT}px`,
+                    top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+                    backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
+                    borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                    borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                    opacity: isDragging ? 0.5 : 1,
+                    cursor: 'pointer',
+                    zIndex: 1
+                  }}
+                  className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap 
+                             transition-all duration-200 hover:ring-2 hover:ring-white hover:z-10"
+                >
+                  {renderGanttTaskContent({
+                    task: taskData.task,
+                    groupBy,
+                    labelIndex
+                  })}
+                </div>
+            );
+          })}
             </div>
           ))}
         </div>
