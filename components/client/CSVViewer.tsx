@@ -814,20 +814,25 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
     return <p>Aucune donnée à afficher pour cette date</p>;
   }
 
-  // Création des données groupées avec le typage correct
   const groupedData: GanttChartData[] = groups.map(group => {
-    // Création des tâches pour chaque groupe avec le typage TaskData
     const tasks: TaskData[] = filteredDataForDate
       .filter(row => row && row[groupIndex] === group)
-      .map(task => ({
-        task,
-        startPercentage: getTimePercentage(task[3]),
-        duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
-        operationId: getOperationId(task),
-        isMultiDay: task[2] && task[4] && !isSameDay(task[2], task[4]),
-        isStart: task[2] && isSameDay(task[2], selectedDate),
-        isEnd: task[4] && isSameDay(task[4], selectedDate)
-      }));
+      .map(task => {
+        const hasStartAndEnd = Boolean(task[2] && task[4]);
+        const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
+        const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
+        const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
+
+        return {
+          task,
+          startPercentage: getTimePercentage(task[3]),
+          duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
+          operationId: getOperationId(task),
+          isMultiDay,
+          isStart,
+          isEnd
+        };
+      });
 
     const overlaps = detectOverlaps(tasks);
     const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
