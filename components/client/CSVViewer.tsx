@@ -28,7 +28,6 @@ interface TooltipData {
   };
 }
 
-
 interface DraggedTaskData {
   task: string[];
   date: string;
@@ -103,9 +102,9 @@ const CSVViewer: React.FC = () => {
       operation: '',
       startDateTime: '',
       endDateTime: '',
-      affect: '',
-      technician: '',
+      driver: '',
       location: '',
+      technician: '',
       comment: ''
     }
   });
@@ -157,8 +156,9 @@ const CSVViewer: React.FC = () => {
     return `${date} ${time}`;
   };
 
-  // ... Suite dans les parties suivantes
+  // ... Suite dans la partie 2
   // Partie 2 - Gestion des fichiers et données
+
 const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -328,217 +328,187 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     }
   }, [data, isSameDay]);
 
-// ... Suite dans la partie 3
-// Partie 3 - Gestion de l'édition et du groupement
+  // ... Suite dans la partie 3
+  // Partie 3 - Gestion de l'édition et du groupement
 
 const handleEditClick = (row: string[]): void => {
-    const operationId = getOperationId(row);
-    setEditingRow(operationId);
-    const rowData: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      rowData[header] = row[index] || '';
-    });
-    setEditedData(rowData);
-  };
+  const operationId = getOperationId(row);
+  setEditingRow(operationId);
+  const rowData: Record<string, string> = {};
+  headers.forEach((header, index) => {
+    rowData[header] = row[index] || '';
+  });
+  setEditedData(rowData);
+};
 
-  const handleCancelEdit = (): void => {
-    setEditingRow(null);
-    setEditedData({});
-  };
+const handleCancelEdit = (): void => {
+  setEditingRow(null);
+  setEditedData({});
+};
 
-  const handleSaveEdit = (operationId: string): void => {
-    const updatedRow = headers.map(header => editedData[header] || '');
-    setData(prevData => 
-      prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
-    );
-    setEditingRow(null);
-    setEditedData({});
-  };
-
-  const handleInputChange = (header: string, value: string): void => {
-    setEditedData(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
-
-  const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): {
-    groups: string[];
-    groupIndex: number;
-    labelIndex: number;
-  } => {
-    let groupIndex: number;
-    let labelIndex: number;
-    let groups: string[] = [];
-
-    switch (groupBy) {
-      case 'Véhicule':
-        groupIndex = 0;
-        labelIndex = 1;
-        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
-          .filter(Boolean)
-          .sort();
-        break;
-      case 'Lieu':
-        groupIndex = 10;
-        labelIndex = 1;
-        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
-          .filter(Boolean)
-          .sort();
-        break;
-      case 'Technicien':
-        groupIndex = 15;
-        labelIndex = 15;
-        groups = allTechnicians;
-        break;
-      default:
-        return { groups: [], groupIndex: 0, labelIndex: 0 };
-    }
-
-    return { groups, groupIndex, labelIndex };
-  }, [allTechnicians]);
-
-  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
-    setData(prevData => {
-      return prevData.map(row => {
-        if (getOperationId(row) === operationId) {
-          const newRow = [...row];
-          newRow[15] = newTechnician;
-          return newRow;
-        }
-        return row;
-      });
-    });
-  }, []);
-
-  const detectOverlaps = (tasks: Array<{
-    task: string[];
-    startPercentage: number;
-    duration: number;
-  }>): Map<string, number> => {
-    const sortedTasks = [...tasks].sort((a, b) => {
-      if (a.startPercentage === b.startPercentage) {
-        return (b.startPercentage + b.duration) - (a.startPercentage + a.duration);
-      }
-      return a.startPercentage - b.startPercentage;
-    });
-
-    const overlaps = new Map<string, number>();
-    const timeSlots = new Map<string, string>();
-
-    for (let i = 0; i < sortedTasks.length; i++) {
-      const currentTask = sortedTasks[i];
-      const currentId = getOperationId(currentTask.task);
-      const start = currentTask.startPercentage;
-      const end = start + currentTask.duration;
-
-      let level = 0;
-      let foundSlot = false;
-
-      while (!foundSlot) {
-        foundSlot = true;
-        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-          const timeKey = `${level}_${time}`;
-          if (timeSlots.has(timeKey)) {
-            foundSlot = false;
-            level++;
-            break;
-          }
-        }
-      }
-
-      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-        timeSlots.set(`${level}_${time}`, currentId);
-      }
-
-      overlaps.set(currentId, level);
-    }
-
-    return overlaps;
-  };
-
-  const handleTaskHover = useCallback(
-    (event: React.MouseEvent, task: TaskData, show: boolean): void => {
-      if (show) {
-        const rect = event.currentTarget.getBoundingClientRect();
-        const scrollY = window.scrollY || window.pageYOffset;
-        setTooltip({
-          visible: true,
-          x: rect.left,
-          y: rect.bottom + scrollY,
-          content: {
-            vehicle: task.task[0] || 'Non spécifié',
-            operation: task.task[1] || 'Non spécifié',
-            startDateTime: formatDateTime(task.task[2], task.task[3]),
-            endDateTime: formatDateTime(task.task[4], task.task[5]),
-            affect: task.task[14] || 'Non spécifié',
-            technician: task.task[15] || 'Non spécifié',
-            location: task.task[10] || 'Non spécifié',
-            comment: task.task[16] || 'Aucun commentaire'
-          }
-        });
-      } else {
-        setTooltip(prev => ({ ...prev, visible: false }));
-      }
-    },
-    [formatDateTime]
+const handleSaveEdit = (operationId: string): void => {
+  const updatedRow = headers.map(header => editedData[header] || '');
+  setData(prevData => 
+    prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
   );
+  setEditingRow(null);
+  setEditedData({});
+};
 
-  // Fonction pour calculer la position optimale du tooltip
-  const calculateTooltipPosition = useCallback((rect: DOMRect): { x: number; y: number } => {
-    const margin = 10;
-    const tooltipHeight = 200; // Hauteur approximative du tooltip
-    const tooltipWidth = 300; // Largeur approximative du tooltip
-    
-    let x = rect.left;
-    let y = rect.bottom + window.scrollY + margin;
+const handleInputChange = (header: string, value: string): void => {
+  setEditedData(prev => ({
+    ...prev,
+    [header]: value
+  }));
+};
 
-    // Vérifier si le tooltip dépasse à droite
-    if (x + tooltipWidth > window.innerWidth) {
-      x = window.innerWidth - tooltipWidth - margin;
-    }
+const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): {
+  groups: string[];
+  groupIndex: number;
+  labelIndex: number;
+} => {
+  let groupIndex: number;
+  let labelIndex: number;
+  let groups: string[] = [];
 
-    // Vérifier si le tooltip dépasse en bas
-    if (y + tooltipHeight > window.scrollY + window.innerHeight) {
-      y = rect.top + window.scrollY - tooltipHeight - margin;
-    }
+  switch (groupBy) {
+    case 'Véhicule':
+      groupIndex = 0;
+      labelIndex = 1;
+      groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+        .filter(Boolean)
+        .sort();
+      break;
+    case 'Lieu':
+      groupIndex = 10;
+      labelIndex = 1;
+      groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+        .filter(Boolean)
+        .sort();
+      break;
+    case 'Technicien':
+      groupIndex = 15;
+      labelIndex = 15;
+      groups = allTechnicians;
+      break;
+    default:
+      return { groups: [], groupIndex: 0, labelIndex: 0 };
+  }
 
-    return { x, y };
-  }, []);
+  return { groups, groupIndex, labelIndex };
+}, [allTechnicians]);
 
-  const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
-    const operationId = getOperationId(row);
-    const isEditing = editingRow === operationId;
-
-    if (isEditing) {
-      if (header.toLowerCase().includes('date')) {
-        return (
-          <input
-            type="date"
-            value={editedData[header] || ''}
-            onChange={(e) => handleInputChange(header, e.target.value)}
-            className="w-full p-1 border rounded"
-          />
-        );
+const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+  setData(prevData => {
+    return prevData.map(row => {
+      if (getOperationId(row) === operationId) {
+        const newRow = [...row];
+        newRow[15] = newTechnician;
+        return newRow;
       }
-      return (
-        <input
-          type="text"
-          value={editedData[header] || ''}
-          onChange={(e) => handleInputChange(header, e.target.value)}
-          className="w-full p-1 border rounded"
-        />
-      );
+      return row;
+    });
+  });
+}, []);
+
+const detectOverlaps = (tasks: Array<{
+  task: string[];
+  startPercentage: number;
+  duration: number;
+}>): Map<string, number> => {
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (a.startPercentage === b.startPercentage) {
+      return (b.startPercentage + b.duration) - (a.startPercentage + a.duration);
     }
-    return cell || '';
-  };
+    return a.startPercentage - b.startPercentage;
+  });
+
+  const overlaps = new Map<string, number>();
+  const timeSlots = new Map<string, string>();
+
+  for (let i = 0; i < sortedTasks.length; i++) {
+    const currentTask = sortedTasks[i];
+    const currentId = getOperationId(currentTask.task);
+    const start = currentTask.startPercentage;
+    const end = start + currentTask.duration;
+
+    let level = 0;
+    let foundSlot = false;
+
+    while (!foundSlot) {
+      foundSlot = true;
+      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+        const timeKey = `${level}_${time}`;
+        if (timeSlots.has(timeKey)) {
+          foundSlot = false;
+          level++;
+          break;
+        }
+      }
+    }
+
+    for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+      timeSlots.set(`${level}_${time}`, currentId);
+    }
+
+    overlaps.set(currentId, level);
+  }
+
+  return overlaps;
+};
+
+const handleTaskHover = useCallback(
+  (event: React.MouseEvent, task: TaskData, show: boolean): void => {
+    if (show) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const scrollY = window.scrollY || window.pageYOffset;
+      const scrollX = window.scrollX || window.pageXOffset;
+      
+      // Calcul de la position optimale pour le tooltip
+      let x = rect.left + scrollX;
+      let y = rect.bottom + scrollY + 5; // 5px de marge
+
+      // Éviter que le tooltip ne sorte de l'écran
+      const tooltipWidth = 300; // Largeur approximative du tooltip
+      const tooltipHeight = 200; // Hauteur approximative du tooltip
+
+      if (x + tooltipWidth > window.innerWidth + scrollX) {
+        x = window.innerWidth + scrollX - tooltipWidth - 10;
+      }
+
+      if (y + tooltipHeight > window.innerHeight + scrollY) {
+        y = rect.top + scrollY - tooltipHeight - 5;
+      }
+
+      setTooltip({
+        visible: true,
+        x,
+        y,
+        content: {
+          vehicle: task.task[0] || 'Non spécifié',      // 1ère colonne
+          operation: task.task[1] || 'Non spécifié',    // 2ème colonne
+          startDateTime: `${task.task[2] || 'Non spécifié'} ${task.task[3] || ''}`, // 3ème et 4ème colonnes
+          endDateTime: `${task.task[4] || 'Non spécifié'} ${task.task[5] || ''}`,   // 5ème et 6ème colonnes
+          driver: task.task[11] || 'Non spécifié',      // 12ème colonne
+          location: task.task[10] || 'Non spécifié',    // 11ème colonne
+          technician: task.task[15] || 'Non spécifié',  // 16ème colonne
+          comment: task.task[16] || 'Aucun commentaire' // 17ème colonne
+        }
+      });
+    } else {
+      setTooltip(prev => ({ ...prev, visible: false }));
+    }
+  },
+  []
+);
 
 // ... Suite dans la partie 4
 // Partie 4 - Gestion du drag & drop
 
 const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
-    setTooltip(prev => ({ ...prev, visible: false })); // Masquer le tooltip pendant le drag
+    // Masquer le tooltip pendant le drag
+    setTooltip(prev => ({ ...prev, visible: false }));
 
     const taskData: DraggedTaskData = {
       ...task,
@@ -678,94 +648,43 @@ const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): vo
     );
   }, [draggedTask, selectedDate]);
 
+  // Fonction pour gérer le survol pendant le drag
+  const handleDragHover = useCallback((technicianId: string, isHovering: boolean): void => {
+    if (!draggedTask || !canDropTask(technicianId)) return;
+
+    if (isHovering) {
+      setDropZoneActive(technicianId);
+    } else if (dropZoneActive === technicianId) {
+      setDropZoneActive(null);
+    }
+  }, [draggedTask, canDropTask, dropZoneActive]);
+
 // ... Suite dans la partie 5
 // Partie 5 - Composants d'interface
-const handleTaskHover = useCallback(
-  (event: React.MouseEvent, task: TaskData, show: boolean): void => {
-    if (show) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const scrollY = window.scrollY || window.pageYOffset;
-      setTooltip({
-        visible: true,
-        x: rect.left,
-        y: rect.bottom + scrollY,
-        content: {
-          vehicle: task.task[0] || 'Non spécifié',      // 1ère colonne
-          operation: task.task[1] || 'Non spécifié',    // 2ème colonne
-          startDateTime: `${task.task[2] || 'Non spécifié'} ${task.task[3] || ''}`, // 3ème et 4ème colonnes
-          endDateTime: `${task.task[4] || 'Non spécifié'} ${task.task[5] || ''}`,   // 5ème et 6ème colonnes
-          driver: task.task[11] || 'Non spécifié',      // 12ème colonne
-          location: task.task[10] || 'Non spécifié',    // 11ème colonne
-          technician: task.task[15] || 'Non spécifié',  // 16ème colonne
-          comment: task.task[16] || 'Aucun commentaire' // 17ème colonne
-        }
-      });
-    } else {
-      setTooltip(prev => ({ ...prev, visible: false }));
-    }
-  },
-  []
-);
-
-
-
-  
 
 const Tooltip: React.FC<{ data: TooltipData }> = ({ data }) => {
   if (!data.visible) return null;
 
-  const position = calculateTooltipPosition({ 
-    left: data.x, 
-    bottom: data.y, 
-    right: data.x, 
-    top: data.y - 10,
-    width: 0,
-    height: 0,
-    x: data.x,
-    y: data.y,
-    toJSON: () => ({})
-  });
-
   return (
     <div
-      className="fixed z-50 bg-gray-900 text-white p-4 rounded shadow-lg text-sm"
+      className="fixed z-50 bg-gray-900/95 text-white p-4 rounded-lg shadow-xl text-sm"
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
+        left: `${data.x}px`,
+        top: `${data.y}px`,
         maxWidth: '400px',
         backdropFilter: 'blur(8px)',
-        border: '1px solid rgba(255, 255, 255, 0.1)'
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        pointerEvents: 'none' // Important : permet au hover de continuer à fonctionner
       }}
     >
-      <div className="grid gap-1">
-        <div className="grid grid-cols-[auto,1fr] gap-2">
-          <span className="font-semibold text-gray-300">Véhicule :</span>
-          <span>{data.content.vehicle}</span>
-        </div>
-        <div className="grid grid-cols-[auto,1fr] gap-2">
-          <span className="font-semibold text-gray-300">Opération :</span>
-          <span>{data.content.operation}</span>
-        </div>
-        <div className="grid grid-cols-[auto,1fr] gap-2">
-          <span className="font-semibold text-gray-300">Début :</span>
-          <span>{data.content.startDateTime}</span>
-        </div>
-        <div className="grid grid-cols-[auto,1fr] gap-2">
-          <span className="font-semibold text-gray-300">Fin :</span>
-          <span>{data.content.endDateTime}</span>
-        </div>
-        <div className="grid grid-cols-[auto,1fr] gap-2">
-          <span className="font-semibold text-gray-300">Affect :</span>
-          <span>{data.content.affect}</span>
-        </div>
-        <div className="grid grid-cols-[auto,1fr] gap-2">
-          <span className="font-semibold text-gray-300">Technicien :</span>
-          <span>{data.content.technician}</span>
-        </div>
-        <div className="grid grid-cols-[auto,1fr] gap-2">
-          <span className="font-semibold text-gray-300">Lieu :</span>
-          <span>{data.content.location}</span>
-        </div>
+      <div className="grid gap-2">
+        <div><span className="font-semibold text-gray-300">Véhicule :</span> {data.content.vehicle}</div>
+        <div><span className="font-semibold text-gray-300">Opération :</span> {data.content.operation}</div>
+        <div><span className="font-semibold text-gray-300">Date et heure de début :</span> {data.content.startDateTime}</div>
+        <div><span className="font-semibold text-gray-300">Date et heure de fin :</span> {data.content.endDateTime}</div>
+        <div><span className="font-semibold text-gray-300">Conducteur :</span> {data.content.driver}</div>
+        <div><span className="font-semibold text-gray-300">Lieu :</span> {data.content.location}</div>
+        <div><span className="font-semibold text-gray-300">Technicien :</span> {data.content.technician}</div>
         {data.content.comment && (
           <div className="mt-2 pt-2 border-t border-gray-700">
             <span className="font-semibold text-gray-300">Commentaire :</span>
@@ -1063,8 +982,8 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
 
   return (
     <div style={{ overflowX: 'auto', width: '100%' }}>
-      <div style={{ display: 'flex', minWidth: '1000px' }}>
-        {/* Tooltip Component */}
+      <div style={{ display: 'flex', minWidth: '1000px', position: 'relative' }}>
+        {/* Composant Tooltip - en dehors des zones de scroll */}
         <Tooltip data={tooltip} />
         
         {/* Colonne des groupes */}
@@ -1104,36 +1023,37 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
               onDragLeave={groupBy === 'Technicien' ? (e) => handleDragLeave(e, group) : undefined}
               onDrop={groupBy === 'Technicien' ? (e) => handleDrop(group, e) : undefined}
             >
-            {tasks.map((taskData) => {
-  const verticalPosition = overlaps.get(taskData.operationId) || 0;
-  const isDragging = isTaskBeingDragged(taskData.operationId);
-  
-  return (
-    <div
-      key={`${taskData.operationId}_${selectedDate}`}
-      draggable={groupBy === 'Technicien'}
-      onDragStart={(e) => handleDragStart(e, taskData)}
-      onDragEnd={handleDragEnd}
-      onMouseEnter={(e) => handleTaskHover(e, taskData, true)}  // Ici
-      onMouseLeave={(e) => handleTaskHover(e, taskData, false)} // Et ici
-      style={{
-        position: 'absolute',
-        left: `${taskData.startPercentage}%`,
-        width: `${taskData.duration}%`,
-        height: `${TASK_HEIGHT}px`,
-        top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-        backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
-        borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-        borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
-        opacity: isDragging ? 0.5 : 1,
-        cursor: groupBy === 'Technicien' ? 'grab' : 'default'
-      }}
-      className={`
-        rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap
-        transition-all duration-200
-        ${isDragging ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-white'}
-      `}
-    >
+              {tasks.map((taskData) => {
+                const verticalPosition = overlaps.get(taskData.operationId) || 0;
+                const isDragging = isTaskBeingDragged(taskData.operationId);
+                
+                return (
+                  <div
+                    key={`${taskData.operationId}_${selectedDate}`}
+                    draggable={groupBy === 'Technicien'}
+                    onDragStart={(e) => handleDragStart(e, taskData)}
+                    onDragEnd={handleDragEnd}
+                    onMouseEnter={(e) => handleTaskHover(e, taskData, true)}
+                    onMouseLeave={(e) => handleTaskHover(e, taskData, false)}
+                    style={{
+                      position: 'absolute',
+                      left: `${taskData.startPercentage}%`,
+                      width: `${taskData.duration}%`,
+                      height: `${TASK_HEIGHT}px`,
+                      top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+                      backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
+                      borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                      opacity: isDragging ? 0.5 : 1,
+                      cursor: groupBy === 'Technicien' ? 'grab' : 'pointer',
+                      zIndex: tooltip.visible && getOperationId(taskData.task) === getOperationId(taskData.task) ? 2 : 1
+                    }}
+                    className={`
+                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap
+                      transition-all duration-200 hover:ring-2 hover:ring-white
+                      hover:shadow-lg hover:z-10
+                    `}
+                  >
                     {renderGanttTaskContent({
                       task: taskData.task,
                       groupBy,
@@ -1300,7 +1220,10 @@ return (
       )}
       {selectedDate && activeTab !== 0 && (
         <div className="bg-gray-50 p-3 rounded-lg">
-          Astuce : Survolez les tâches pour voir plus de détails
+          <div>Astuce : Survolez les tâches pour voir plus de détails</div>
+          <div className="mt-1">
+            Les informations affichées incluent : véhicule, opération, horaires, conducteur, lieu, technicien et commentaires
+          </div>
         </div>
       )}
     </div>
@@ -1313,3 +1236,5 @@ const MemoizedCSVViewer = React.memo(CSVViewer);
 
 // Export par défaut du composant
 export default MemoizedCSVViewer;
+
+  
