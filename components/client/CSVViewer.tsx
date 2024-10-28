@@ -714,7 +714,7 @@ const renderActionButtons = (row: string[], isEditing: boolean): React.ReactNode
   );
   // Partie 6 - Visualisations principales
 
- const renderTable = (dataToRender: string[][]): React.ReactNode => (
+const renderTable = (dataToRender: string[][]): React.ReactNode => (
   <div className="w-full">
     <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
       <h2 className="text-lg font-semibold">Vue Tableau</h2>
@@ -770,9 +770,6 @@ const renderActionButtons = (row: string[], isEditing: boolean): React.ReactNode
                     </div>
                   </td>
                 ))}
-                {<td className="border border-gray-300 py-2 px-4">
-  {renderActionButtons(row, isEditing)}  {/* Passez row au lieu de operationId */}
-</td>}
                 <td className="border border-gray-300 py-2 px-4">
                   {renderActionButtons(row, isEditing)}
                 </td>
