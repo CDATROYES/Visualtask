@@ -17,16 +17,17 @@ interface TooltipData {
   x: number;
   y: number;
   content: {
-    vehicle: string;
-    operation: string;
-    startDateTime: string;
-    endDateTime: string;
-    affect: string;
-    technician: string;
-    location: string;
-    comment: string;
+    vehicle: string;       // 1ère colonne
+    operation: string;     // 2ème colonne
+    startDateTime: string; // 3ème et 4ème colonnes
+    endDateTime: string;   // 5ème et 6ème colonnes
+    driver: string;        // 12ème colonne
+    location: string;      // 11ème colonne
+    technician: string;    // 16ème colonne
+    comment: string;       // 17ème colonne
   };
 }
+
 
 interface DraggedTaskData {
   task: string[];
@@ -679,6 +680,36 @@ const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): vo
 
 // ... Suite dans la partie 5
 // Partie 5 - Composants d'interface
+const handleTaskHover = useCallback(
+  (event: React.MouseEvent, task: TaskData, show: boolean): void => {
+    if (show) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const scrollY = window.scrollY || window.pageYOffset;
+      setTooltip({
+        visible: true,
+        x: rect.left,
+        y: rect.bottom + scrollY,
+        content: {
+          vehicle: task.task[0] || 'Non spécifié',      // 1ère colonne
+          operation: task.task[1] || 'Non spécifié',    // 2ème colonne
+          startDateTime: `${task.task[2] || 'Non spécifié'} ${task.task[3] || ''}`, // 3ème et 4ème colonnes
+          endDateTime: `${task.task[4] || 'Non spécifié'} ${task.task[5] || ''}`,   // 5ème et 6ème colonnes
+          driver: task.task[11] || 'Non spécifié',      // 12ème colonne
+          location: task.task[10] || 'Non spécifié',    // 11ème colonne
+          technician: task.task[15] || 'Non spécifié',  // 16ème colonne
+          comment: task.task[16] || 'Aucun commentaire' // 17ème colonne
+        }
+      });
+    } else {
+      setTooltip(prev => ({ ...prev, visible: false }));
+    }
+  },
+  []
+);
+
+
+
+  
 
 const Tooltip: React.FC<{ data: TooltipData }> = ({ data }) => {
   if (!data.visible) return null;
@@ -1073,36 +1104,36 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
               onDragLeave={groupBy === 'Technicien' ? (e) => handleDragLeave(e, group) : undefined}
               onDrop={groupBy === 'Technicien' ? (e) => handleDrop(group, e) : undefined}
             >
-              {tasks.map((taskData) => {
-                const verticalPosition = overlaps.get(taskData.operationId) || 0;
-                const isDragging = isTaskBeingDragged(taskData.operationId);
-                
-                return (
-                  <div
-                    key={`${taskData.operationId}_${selectedDate}`}
-                    draggable={groupBy === 'Technicien'}
-                    onDragStart={(e) => handleDragStart(e, taskData)}
-                    onDragEnd={handleDragEnd}
-                    onMouseEnter={(e) => handleTaskHover(e, taskData, true)}
-                    onMouseLeave={(e) => handleTaskHover(e, taskData, false)}
-                    style={{
-                      position: 'absolute',
-                      left: `${taskData.startPercentage}%`,
-                      width: `${taskData.duration}%`,
-                      height: `${TASK_HEIGHT}px`,
-                      top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                      backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
-                      borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                      opacity: isDragging ? 0.5 : 1,
-                      cursor: groupBy === 'Technicien' ? 'grab' : 'default'
-                    }}
-                    className={`
-                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap
-                      transition-all duration-200
-                      ${isDragging ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-white'}
-                    `}
-                  >
+            {tasks.map((taskData) => {
+  const verticalPosition = overlaps.get(taskData.operationId) || 0;
+  const isDragging = isTaskBeingDragged(taskData.operationId);
+  
+  return (
+    <div
+      key={`${taskData.operationId}_${selectedDate}`}
+      draggable={groupBy === 'Technicien'}
+      onDragStart={(e) => handleDragStart(e, taskData)}
+      onDragEnd={handleDragEnd}
+      onMouseEnter={(e) => handleTaskHover(e, taskData, true)}  // Ici
+      onMouseLeave={(e) => handleTaskHover(e, taskData, false)} // Et ici
+      style={{
+        position: 'absolute',
+        left: `${taskData.startPercentage}%`,
+        width: `${taskData.duration}%`,
+        height: `${TASK_HEIGHT}px`,
+        top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+        backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
+        borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
+        borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
+        opacity: isDragging ? 0.5 : 1,
+        cursor: groupBy === 'Technicien' ? 'grab' : 'default'
+      }}
+      className={`
+        rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap
+        transition-all duration-200
+        ${isDragging ? 'ring-2 ring-blue-500' : 'hover:ring-2 hover:ring-white'}
+      `}
+    >
                     {renderGanttTaskContent({
                       task: taskData.task,
                       groupBy,
