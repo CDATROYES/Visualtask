@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
+import { Card, CardContent } from '../ui/card';  // Modifiez cette ligne
 
 // Interfaces principales
 interface CSVResult {
