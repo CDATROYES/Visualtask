@@ -22,8 +22,8 @@ interface DraggedTaskData {
   task: string[];
   date: string;
   operationId: string;
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
   originalTechnician: string;
   startPercentage: number;
   duration: number;
@@ -37,21 +37,22 @@ interface TaskData {
   isMultiDay: boolean;
   isStart: boolean;
   isEnd: boolean;
+  isUnassigned?: boolean;
 }
 
 interface GanttChartData {
   group: string;
-  tasks: Array<{
-    task: string[];
-    startPercentage: number;
-    duration: number;
-    operationId: string;
-    isMultiDay: boolean;
-    isStart: boolean;
-    isEnd: boolean;
-  }>;
+  tasks: TaskData[];
   overlaps: Map<string, number>;
   rowHeight: number;
+  isUnassignedGroup?: boolean;
+}
+
+interface GroupData {
+  groups: string[];
+  groupIndex: number;
+  labelIndex: number;
+  unassignedTasks: string[][];
 }
 
 interface EditingActions {
@@ -110,6 +111,7 @@ const CSVViewer: React.FC = () => {
 
   // Fonctions utilitaires de base
   const isSameDay = (date1: string, date2: string): boolean => {
+    if (!date1 || !date2) return false;
     const d1 = new Date(date1);
     const d2 = new Date(date2);
     return d1.getFullYear() === d2.getFullYear() &&
@@ -118,7 +120,7 @@ const CSVViewer: React.FC = () => {
   };
 
   const getOperationId = (task: string[]): string => {
-    return `${task[0]}_${task[1]}_${task[2]}_${task[4]}`;
+    return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
   };
 
   const getUniqueColor = (index: number): string => {
@@ -127,14 +129,14 @@ const CSVViewer: React.FC = () => {
   };
 
   const getTimePercentage = (time: string): number => {
-    if (!time) return 0;
+    if (!time) return 33.33; // 8:00 par défaut
     try {
       const [hours, minutes] = time.split(':').map(Number);
-      if (isNaN(hours) || isNaN(minutes)) return 0;
+      if (isNaN(hours) || isNaN(minutes)) return 33.33;
       return ((hours * 60 + minutes) / (24 * 60)) * 100;
     } catch (err) {
       console.error('Erreur lors du calcul du pourcentage de temps:', err);
-      return 0;
+      return 33.33;
     }
   };
 
@@ -167,6 +169,16 @@ const CSVViewer: React.FC = () => {
   // Fonction de gestion du clic sur une tâche
   const handleTaskClick = (operationId: string) => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
+  };
+
+  // Fonction pour assigner une date à une tâche
+  const assignDateToTask = (task: string[], targetDate: string): string[] => {
+    const updatedTask = [...task];
+    updatedTask[2] = targetDate;  // Date de début
+    updatedTask[3] = '08:00';     // Heure de début par défaut
+    updatedTask[4] = targetDate;  // Date de fin
+    updatedTask[5] = '09:00';     // Heure de fin par défaut (1 heure plus tard)
+    return updatedTask;
   };
   // Gestion des fichiers et données
 const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -302,38 +314,46 @@ const filterDataForDate = useCallback((dateStr: string, operationId: string | nu
     const dateObj = new Date(dateStr);
     dateObj.setHours(0, 0, 0, 0);
 
-    const filteredByDate = data
-      .filter((row: string[]) => {
-        if (!row[2] || !row[4]) return false;
+    // Inclure les tâches non affectées si aucun operationId n'est spécifié
+    let filteredByDate = data.filter((row: string[]) => {
+      // Si la tâche n'a pas de date, elle est toujours incluse
+      if (!row[2] || !row[4]) return operationId ? getOperationId(row) === operationId : true;
 
-        try {
-          const startDate = new Date(row[2]);
-          startDate.setHours(0, 0, 0, 0);
-          const endDate = new Date(row[4]);
-          endDate.setHours(23, 59, 59, 999);
-          return startDate <= dateObj && dateObj <= endDate;
-        } catch (err) {
-          console.error('Erreur lors du filtrage des dates:', err);
-          return false;
-        }
-      })
-      .map(row => {
-        const adjustedRow = [...row];
-        const startDate = new Date(adjustedRow[2]);
-        const endDate = new Date(adjustedRow[4]);
-        const currentDate = new Date(dateStr);
+      try {
+        const startDate = new Date(row[2]);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(row[4]);
+        endDate.setHours(23, 59, 59, 999);
+        return startDate <= dateObj && dateObj <= endDate;
+      } catch (err) {
+        console.error('Erreur lors du filtrage des dates:', err);
+        return false;
+      }
+    });
 
-        if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
-          adjustedRow[3] = '00:00';
-        }
-        if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
-          adjustedRow[5] = '23:59';
-        }
-
+    // Appliquer les ajustements horaires pour les tâches avec dates
+    filteredByDate = filteredByDate.map(row => {
+      const adjustedRow = [...row];
+      
+      if (!row[2] || !row[4]) {
         return adjustedRow;
-      });
+      }
 
-    // Appliquer le filtre par opération si un operationId est spécifié
+      const startDate = new Date(adjustedRow[2]);
+      const endDate = new Date(adjustedRow[4]);
+      const currentDate = new Date(dateStr);
+
+      if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
+        adjustedRow[3] = '00:00';
+      }
+      if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
+        adjustedRow[5] = '23:59';
+      }
+
+      return adjustedRow;
+    });
+
+    // Filtrer par operationId si spécifié
     if (operationId) {
       return filteredByDate.filter(row => getOperationId(row) === operationId);
     }
@@ -377,14 +397,13 @@ const handleInputChange = (header: string, value: string): void => {
 };
 
 // Groupement des données
-const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): {
-  groups: string[];
-  groupIndex: number;
-  labelIndex: number;
-} => {
+const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
   let groupIndex: number;
   let labelIndex: number;
   let groups: string[] = [];
+  
+  // Séparer les tâches non affectées
+  const unassignedTasks = data.filter(row => !row[2] || !row[4]);
 
   switch (groupBy) {
     case 'Véhicule':
@@ -407,11 +426,16 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
       groups = allTechnicians;
       break;
     default:
-      return { groups: [], groupIndex: 0, labelIndex: 0 };
+      return { groups: [], groupIndex: 0, labelIndex: 0, unassignedTasks: [] };
   }
 
-  return { groups, groupIndex, labelIndex };
-}, [allTechnicians]);
+  // Ajouter le groupe "Non affectées" s'il y a des tâches non affectées
+  if (unassignedTasks.length > 0) {
+    groups.push("Non affectées");
+  }
+
+  return { groups, groupIndex, labelIndex, unassignedTasks };
+}, [allTechnicians, data]);
 
 const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
   setData(prevData => {
@@ -426,11 +450,7 @@ const updateAssignment = useCallback((operationId: string, newTechnician: string
   });
 }, []);
 
-const detectOverlaps = (tasks: Array<{
-  task: string[];
-  startPercentage: number;
-  duration: number;
-}>): Map<string, number> => {
+const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
   const sortedTasks = [...tasks].sort((a, b) => {
     if (a.startPercentage === b.startPercentage) {
       return (b.startPercentage + b.duration) - (a.startPercentage + a.duration);
@@ -479,8 +499,8 @@ const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): vo
     ...task,
     date: selectedDate,
     operationId: getOperationId(task.task),
-    startDate: task.task[2],
-    endDate: task.task[4],
+    startDate: task.task[2] || null,
+    endDate: task.task[4] || null,
     originalTechnician: task.task[15],
     startPercentage: task.startPercentage,
     duration: task.duration
@@ -528,7 +548,7 @@ const handleDragEnd = useCallback((): void => {
   setDropZoneActive(null);
 }, []);
 
-const handleDrop = useCallback((newTechnician: string, e: React.DragEvent<HTMLDivElement>): void => {
+const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
   e.preventDefault();
   e.stopPropagation();
 
@@ -537,27 +557,44 @@ const handleDrop = useCallback((newTechnician: string, e: React.DragEvent<HTMLDi
     return;
   }
 
-  const { operationId, startDate, endDate, originalTechnician } = draggedTask;
-  const selectedDateObj = new Date(selectedDate);
-  const startDateObj = new Date(startDate);
-  const endDateObj = new Date(endDate);
+  const { operationId, task: draggedTaskData, startDate, endDate, originalTechnician } = draggedTask;
+  const isUnassignedTask = !startDate || !endDate;
 
-  if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
-    console.log("Impossible de déplacer une tâche en dehors de sa période");
-    setDropZoneActive(null);
-    setDraggedTask(null);
-    return;
+  if (isUnassignedTask) {
+    const updatedTask = assignDateToTask(draggedTaskData, selectedDate);
+    
+    if (targetGroup !== "Non affectées") {
+      updatedTask[15] = targetGroup;
+    }
+
+    setData(prevData => 
+      prevData.map(row => 
+        getOperationId(row) === operationId ? updatedTask : row
+      )
+    );
+  } else {
+    const selectedDateObj = new Date(selectedDate);
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+
+    if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
+      console.log("Impossible de déplacer une tâche en dehors de sa période");
+      setDropZoneActive(null);
+      setDraggedTask(null);
+      return;
+    }
+
+    if (originalTechnician === targetGroup) {
+      setDropZoneActive(null);
+      return;
+    }
+
+    updateAssignment(operationId, targetGroup);
   }
 
-  if (originalTechnician === newTechnician) {
-    setDropZoneActive(null);
-    return;
-  }
-
-  updateAssignment(operationId, newTechnician);
   setDropZoneActive(null);
   setDraggedTask(null);
-}, [draggedTask, selectedDate, updateAssignment]);
+}, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
 // Composants d'interface de base
 const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
   const operationId = getOperationId(row);
@@ -651,13 +688,21 @@ const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>)
 
 const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
   if (!task) return null;
+  
+  // Pour les tâches non affectées, afficher un style spécial
+  const isUnassigned = !task[2] || !task[4];
+  
   if (groupBy === 'Technicien') {
     return (
       <div className="flex items-center gap-1 w-full overflow-hidden">
         <span className="truncate">
           {`${task[0] || 'N/A'} - ${task[1] || 'N/A'}`}
         </span>
-        {task[2] && task[4] && !isSameDay(task[2], task[4]) && (
+        {isUnassigned ? (
+          <span className="flex-shrink-0 text-xs bg-yellow-200 text-yellow-800 px-1 rounded">
+            Non planifiée
+          </span>
+        ) : task[2] && task[4] && !isSameDay(task[2], task[4]) && (
           <span className="flex-shrink-0 text-xs bg-blue-200 text-blue-800 px-1 rounded">
             Multi-jours
           </span>
@@ -723,11 +768,15 @@ const renderTechnicianInput = (): React.ReactNode => (
 const getDragMessage = (): React.ReactNode => {
   if (!draggedTask) return null;
 
+  const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
+
   return (
     <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-      {draggedTask.task[2] !== selectedDate ? (
+      {isUnassigned ? (
+        "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
+      ) : draggedTask.task[2] !== selectedDate ? (
         <span className="text-red-600">
-          Impossible de déplacer une tâche d'un autre jour ({draggedTask.task[2]})
+          Impossible de déplacer une tâche en dehors de sa période ({draggedTask.task[2]})
         </span>
       ) : (
         "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
@@ -783,19 +832,8 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
           className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
                    transition-colors duration-200 flex items-center gap-2"
         >
-          <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            className="h-5 w-5" 
-            fill="none" 
-            viewBox="0 0 24 24" 
-            stroke="currentColor"
-          >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={2} 
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" 
-            />
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
           Exporter en CSV
         </button>
@@ -810,6 +848,7 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
             {dataToRender.map((row, rowIndex) => {
               const operationId = getOperationId(row);
               const isEditing = editingRow === operationId;
+              const isUnassigned = !row[2] || !row[4];
 
               return (
                 <tr
@@ -817,6 +856,7 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
                   className={`
                     ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
                     ${isEditing ? 'bg-yellow-50' : ''}
+                    ${isUnassigned ? 'bg-yellow-50' : ''}
                     hover:bg-blue-50
                   `}
                 >
@@ -887,31 +927,49 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
   const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
 
   const filteredDataForDate = filterDataForDate(selectedDate);
-  const { groups = [], groupIndex = 0, labelIndex = 0 } = groupDataByType(groupBy, filteredDataForDate) || {};
+  const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = groupDataByType(groupBy, filteredDataForDate) || {};
 
-  if (!groups.length) {
+  if (!groups.length && !unassignedTasks.length) {
     return <p>Aucune donnée à afficher pour cette date</p>;
   }
 
   const groupedData: GanttChartData[] = groups.map(group => {
-    const tasks: TaskData[] = filteredDataForDate
-      .filter(row => row && row[groupIndex] === group)
-      .map(task => {
-        const hasStartAndEnd = Boolean(task[2] && task[4]);
-        const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
-        const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
-        const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
+    let tasks: TaskData[];
+    
+    if (group === "Non affectées") {
+      // Pour les tâches non affectées
+      tasks = unassignedTasks.map(task => ({
+        task,
+        startPercentage: 33.33, // 8h du matin en pourcentage
+        duration: 4.17,         // 1 heure en pourcentage
+        operationId: getOperationId(task),
+        isMultiDay: false,
+        isStart: true,
+        isEnd: true,
+        isUnassigned: true
+      }));
+    } else {
+      // Pour les tâches normales
+      tasks = filteredDataForDate
+        .filter(row => row && row[groupIndex] === group)
+        .map(task => {
+          const hasStartAndEnd = Boolean(task[2] && task[4]);
+          const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
+          const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
+          const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
 
-        return {
-          task,
-          startPercentage: getTimePercentage(task[3]),
-          duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
-          operationId: getOperationId(task),
-          isMultiDay,
-          isStart,
-          isEnd
-        };
-      });
+          return {
+            task,
+            startPercentage: getTimePercentage(task[3]),
+            duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
+            operationId: getOperationId(task),
+            isMultiDay,
+            isStart,
+            isEnd,
+            isUnassigned: false
+          };
+        });
+    }
 
     const overlaps = detectOverlaps(tasks);
     const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
@@ -921,7 +979,8 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
       group,
       tasks,
       overlaps,
-      rowHeight
+      rowHeight,
+      isUnassignedGroup: group === "Non affectées"
     };
   });
 
@@ -934,13 +993,13 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
                className="flex items-center font-bold">
             {groupBy}
           </div>
-          {groupedData.map(({ group, rowHeight }, index) => (
+          {groupedData.map(({ group, rowHeight, isUnassignedGroup }, index) => (
             <div 
               key={group} 
               style={{ height: `${rowHeight}px` }}
               className={`
                 flex items-center px-2.5 border-b border-gray-200
-                ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
                 ${group === 'Sans technicien' ? 'text-red-500' : ''}
               `}
             >
@@ -952,25 +1011,27 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
         {/* Zone de contenu */}
         <div style={{ flex: 1, position: 'relative' }}>
           {renderTimeHeader({ HEADER_HEIGHT })}
-          {groupedData.map(({ group, tasks, overlaps, rowHeight }, index) => (
+          {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
             <div 
               key={group}
               style={{ height: `${rowHeight}px` }}
               className={`
                 relative border-b border-gray-200
-                ${dropZoneActive === group ? 'bg-blue-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                ${dropZoneActive === group ? 'bg-blue-50' : 
+                  isUnassignedGroup ? 'bg-yellow-50' : 
+                  index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
               `}
-              onDragOver={groupBy === 'Technicien' ? handleDragOver : undefined}
-              onDragEnter={groupBy === 'Technicien' ? (e) => handleDragEnter(e, group) : undefined}
-              onDragLeave={groupBy === 'Technicien' ? (e) => handleDragLeave(e, group) : undefined}
-              onDrop={groupBy === 'Technicien' ? (e) => handleDrop(group, e) : undefined}
+              onDragOver={handleDragOver}
+              onDragEnter={(e) => handleDragEnter(e, group)}
+              onDragLeave={(e) => handleDragLeave(e, group)}
+              onDrop={(e) => handleDrop(group, e)}
             >
               {tasks.map((taskData) => {
                 const verticalPosition = overlaps.get(taskData.operationId) || 0;
                 return (
                   <div
                     key={`${taskData.operationId}_${selectedDate}`}
-                    draggable={groupBy === 'Technicien'}
+                    draggable={true}
                     onDragStart={(e) => handleDragStart(e, taskData)}
                     onDragEnd={handleDragEnd}
                     onClick={() => handleTaskClick(taskData.operationId)}
@@ -980,15 +1041,18 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
                       width: `${taskData.duration}%`,
                       height: `${TASK_HEIGHT}px`,
                       top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                      backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
+                      backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
                       borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
                       borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
                       cursor: 'pointer',
                       outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
                       boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
                     }}
-                    className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none 
-                             hover:brightness-90 transition-all duration-200"
+                    className={`
+                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
+                      hover:brightness-90 transition-all duration-200
+                      ${taskData.isUnassigned ? 'text-black' : ''}
+                    `}
                   >
                     {renderGanttTaskContent({
                       task: taskData.task,
@@ -1041,12 +1105,13 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) 
       
       {draggedTask && getDragMessage()}
       
-      {showTechnicianInput && (
-        <div className="text-sm text-gray-500 italic">
-          Note : Les tâches sans technicien sont affichées en rouge au bas du planning.
-          Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.
-        </div>
-      )}
+      <div className="text-sm text-gray-500 italic space-y-1">
+        {showTechnicianInput && (
+          <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
+        )}
+        <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
+        <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
+      </div>
 
       {selectedDate && (
         <div className="mt-8 border-t-2 border-gray-200 pt-8">
