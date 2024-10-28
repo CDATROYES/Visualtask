@@ -551,460 +551,447 @@ const CSVViewer: React.FC = () => {
   };
   // Partie 5 - Composants d'interface
 
-interface RenderTimeHeaderProps {
-  HEADER_HEIGHT: number;
-}
-
-interface RenderGanttTaskContentProps {
-  task: string[];
-  groupBy: string;
-  labelIndex: number;
-}
-
-const renderTimeHeader = ({ HEADER_HEIGHT }: RenderTimeHeaderProps): React.ReactNode => (
-  <div style={{ 
-    height: `${HEADER_HEIGHT}px`, 
-    borderBottom: '2px solid #333', 
-    backgroundColor: '#f0f0f0', 
-    position: 'relative'
-  }}>
-    {[...Array(24)].map((_, index) => (
-      <div key={index} style={{ 
-        position: 'absolute', 
-        left: `${index * (100 / 24)}%`, 
-        height: '100%', 
-        borderLeft: '1px solid #ccc',
-        width: '1px'
-      }}>
-        <span style={{ 
+  const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
+    <div style={{ 
+      height: `${HEADER_HEIGHT}px`, 
+      borderBottom: '2px solid #333', 
+      backgroundColor: '#f0f0f0', 
+      position: 'relative'
+    }}>
+      {Array.from({ length: 24 }).map((_, index) => (
+        <div key={index} style={{ 
           position: 'absolute', 
-          bottom: '5px', 
-          left: '-15px', 
-          fontSize: '12px',
-          width: '30px',
-          textAlign: 'center'
+          left: `${index * (100 / 24)}%`, 
+          height: '100%', 
+          borderLeft: '1px solid #ccc',
+          width: '1px'
         }}>
-          {`${index.toString().padStart(2, '0')}:00`}
-        </span>
-      </div>
-    ))}
-  </div>
-);
-
-const renderGanttTaskContent = ({ task, groupBy, labelIndex }: RenderGanttTaskContentProps): React.ReactNode => {
-  if (!task) return null;
-  if (groupBy === 'Technicien') {
-    return (
-      <div className="flex items-center gap-1 w-full overflow-hidden">
-        <span className="truncate">
-          {`${task[0] || 'N/A'} - ${task[1] || 'N/A'}`}
-        </span>
-        {task[2] && task[4] && !isSameDay(task[2], task[4]) && (
-          <span className="flex-shrink-0 text-xs bg-blue-200 text-blue-800 px-1 rounded">
-            Multi-jours
+          <span style={{ 
+            position: 'absolute', 
+            bottom: '5px', 
+            left: '-15px', 
+            fontSize: '12px',
+            width: '30px',
+            textAlign: 'center'
+          }}>
+            {`${index.toString().padStart(2, '0')}:00`}
           </span>
-        )}
-      </div>
-    );
-  }
-  return task[labelIndex] || 'N/A';
-};
+        </div>
+      ))}
+    </div>
+  );
 
-const renderTableHeader = (): React.ReactNode => (
-  <tr>
-    {headers.slice(0, 17).map((header, index) => (
-      <th
-        key={index}
-        className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
-      >
-        <div className="flex flex-col gap-1">
-          <span className="truncate">{header}</span>
-          {isFiltering && (
-            <input
-              type="text"
-              value={filters[header] || ''}
-              onChange={(e) => handleFilterChange(header, e.target.value)}
-              placeholder={`Filtrer ${header}`}
-              className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
-            />
+  const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
+    if (!task) return null;
+    if (groupBy === 'Technicien') {
+      return (
+        <div className="flex items-center gap-1 w-full overflow-hidden">
+          <span className="truncate">
+            {`${task[0] || 'N/A'} - ${task[1] || 'N/A'}`}
+          </span>
+          {task[2] && task[4] && !isSameDay(task[2], task[4]) && (
+            <span className="flex-shrink-0 text-xs bg-blue-200 text-blue-800 px-1 rounded">
+              Multi-jours
+            </span>
           )}
         </div>
-      </th>
-    ))}
-    <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
-      Actions
-    </th>
-  </tr>
-);
+      );
+    }
+    return task[labelIndex] || 'N/A';
+  };
 
-const renderActionButtons = (operationId: string, isEditing: boolean): React.ReactNode => (
-  <div className="flex justify-center gap-2">
-    {isEditing ? (
-      <>
-        <button
-          onClick={() => handleSaveEdit(operationId)}
-          className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-          title="Enregistrer"
+  const renderTableHeader = (): React.ReactNode => (
+    <tr>
+      {headers.slice(0, 17).map((header, index) => (
+        <th
+          key={index}
+          className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
         >
-          <Save className="h-4 w-4" />
-        </button>
-        <button
-          onClick={handleCancelEdit}
-          className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-          title="Annuler"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </>
-    ) : (
-      <button
-        onClick={() => handleEditClick(operationId)}
-        className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-        title="Modifier"
-      >
-        <Edit2 className="h-4 w-4" />
-      </button>
-    )}
-  </div>
-);
-
-const renderDateSelector = (): React.ReactNode => (
-  <select 
-    value={selectedDate} 
-    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
-    className="w-full md:w-auto p-2 border rounded"
-  >
-    <option value="">Sélectionnez une date</option>
-    {uniqueDates.map(date => (
-      <option key={date} value={date}>{date}</option>
-    ))}
-  </select>
-);
-
-const renderTechnicianInput = (): React.ReactNode => (
-  <div className="flex flex-wrap items-center gap-2">
-    <input
-      type="text"
-      value={newTechnician}
-      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
-      placeholder="Nouveau technicien"
-      className="flex-1 min-w-[200px] p-2 border rounded"
-    />
-    <button
-      onClick={handleAddTechnician}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-               transition-colors duration-200 whitespace-nowrap"
-      disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
-      title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
-             "Impossible d'ajouter 'Sans technicien'" : ''}
-    >
-      Ajouter Technicien
-    </button>
-  </div>
-);
-
-const renderTabButtons = (): React.ReactNode => (
-  <div className="flex flex-wrap gap-2">
-    {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien'].map((title, index) => (
-      <button
-        key={index}
-        onClick={() => setActiveTab(index)}
-        className={`
-          px-4 py-2 rounded-lg transition-all duration-200
-          ${activeTab === index 
-            ? 'bg-blue-500 text-white shadow-md scale-105' 
-            : 'bg-white hover:bg-gray-100'
-          }
-        `}
-      >
-        {title}
-      </button>
-    ))}
-  </div>
-);
-// Partie 6 - Visualisations principales (tableau et Gantt)
-
-interface GanttChartData {
-  group: string;
-  tasks: TaskData[];
-  overlaps: Map<string, number>;
-  rowHeight: number;
-}
-
-const renderTable = (dataToRender: string[][]): React.ReactNode => (
-  <div className="w-full">
-    <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
-      <h2 className="text-lg font-semibold">Vue Tableau</h2>
-      <button
-        onClick={handleExportCSV}
-        className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
-                 transition-colors duration-200 flex items-center gap-2"
-      >
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          className="h-5 w-5" 
-          fill="none" 
-          viewBox="0 0 24 24" 
-          stroke="currentColor"
-        >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" 
-          />
-        </svg>
-        Exporter en CSV
-      </button>
-    </div>
-
-    <div className="w-full overflow-y-auto">
-      <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-        <thead>
-          {renderTableHeader()}
-        </thead>
-        <tbody className="bg-white">
-          {dataToRender.map((row, rowIndex) => {
-            const operationId = getOperationId(row);
-            const isEditing = editingRow === operationId;
-
-            return (
-              <tr
-                key={operationId}
-                className={`
-                  ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
-                  ${isEditing ? 'bg-yellow-50' : ''}
-                  hover:bg-blue-50
-                `}
-              >
-                {row.slice(0, 17).map((cell, cellIndex) => (
-                  <td
-                    key={cellIndex}
-                    className="border border-gray-300 py-2 px-4 text-sm"
-                  >
-                    <div className="truncate">
-                      {renderCell(row, cell, headers[cellIndex], cellIndex)}
-                    </div>
-                  </td>
-                ))}
-                <td className="border border-gray-300 py-2 px-4">
-                  {renderActionButtons(operationId, isEditing)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  </div>
-);
-
-const renderGanttChart = (groupBy: string): React.ReactNode => {
-  if (!selectedDate) {
-    return <p>Veuillez sélectionner une date</p>;
-  }
-
-  const BASE_ROW_HEIGHT = 60;
-  const HEADER_HEIGHT = 40;
-  const TASK_HEIGHT = 20;
-  const TASK_MARGIN = 4;
-  const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
-
-  const selectedDateObj = new Date(selectedDate);
-  const filteredDataForDate = filterDataForDate(selectedDate);
-  const { groups = [], groupIndex = 0, labelIndex = 0 } = groupDataByType(groupBy, filteredDataForDate) || {};
-
-  if (!groups.length) {
-    return <p>Aucune donnée à afficher pour cette date</p>;
-  }
-
-  const groupedData: GanttChartData[] = groups.map(group => {
-    const tasks = filteredDataForDate
-      .filter(row => row && row[groupIndex] === group)
-      .map(task => ({
-        task,
-        startPercentage: getTimePercentage(task[3]),
-        duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
-        operationId: getOperationId(task),
-        isMultiDay: task[2] && task[4] && !isSameDay(task[2], task[4]),
-        isStart: task[2] && isSameDay(task[2], selectedDate),
-        isEnd: task[4] && isSameDay(task[4], selectedDate)
-      }));
-
-    const overlaps = detectOverlaps(tasks);
-    const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
-    const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
-
-    return { group, tasks, overlaps, rowHeight };
-  });
-
-  return (
-    <div style={{ overflowX: 'auto', width: '100%' }}>
-      <div style={{ display: 'flex', minWidth: '1000px' }}>
-        {/* Colonne des groupes */}
-        <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
-          <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
-               className="flex items-center font-bold">
-            {groupBy}
+          <div className="flex flex-col gap-1">
+            <span className="truncate">{header}</span>
+            {isFiltering && (
+              <input
+                type="text"
+                value={filters[header] || ''}
+                onChange={(e) => handleFilterChange(header, e.target.value)}
+                placeholder={`Filtrer ${header}`}
+                className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
+              />
+            )}
           </div>
-          {groupedData.map(({ group, rowHeight }, index) => (
-            <div 
-              key={group} 
-              style={{ height: `${rowHeight}px` }}
-              className={`
-                flex items-center px-2.5 border-b border-gray-200
-                ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                ${group === 'Sans technicien' ? 'text-red-500' : ''}
-              `}
-            >
-              {group || 'N/A'}
-            </div>
-          ))}
-        </div>
+        </th>
+      ))}
+      <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
+        Actions
+      </th>
+    </tr>
+  );
 
-        {/* Zone de contenu */}
-        <div style={{ flex: 1, position: 'relative' }}>
-          {renderTimeHeader({ HEADER_HEIGHT })}
-          {groupedData.map(({ group, tasks, overlaps, rowHeight }, index) => (
-            <div 
-              key={group}
-              style={{ height: `${rowHeight}px` }}
-              className={`
-                relative border-b border-gray-200
-                ${dropZoneActive === group ? 'bg-blue-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-              `}
-              onDragOver={groupBy === 'Technicien' ? handleDragOver : undefined}
-              onDragEnter={groupBy === 'Technicien' ? (e) => handleDragEnter(e, group) : undefined}
-              onDragLeave={groupBy === 'Technicien' ? (e) => handleDragLeave(e, group) : undefined}
-              onDrop={groupBy === 'Technicien' ? (e) => handleDrop(group, e) : undefined}
-            >
-              {tasks.map((taskData) => {
-                const verticalPosition = overlaps.get(taskData.operationId) || 0;
-                return (
-                  <div
-                    key={`${taskData.operationId}_${selectedDate}`}
-                    draggable={groupBy === 'Technicien'}
-                    onDragStart={(e) => handleDragStart(e, taskData)}
-                    onDragEnd={handleDragEnd}
-                    style={{
-                      position: 'absolute',
-                      left: `${taskData.startPercentage}%`,
-                      width: `${taskData.duration}%`,
-                      height: `${TASK_HEIGHT}px`,
-                      top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                      backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
-                      borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined
-                    }}
-                    className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none cursor-grab"
-                  >
-                    {renderGanttTaskContent({ task: taskData.task, groupBy, labelIndex })}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+  const renderActionButtons = (operationId: string, isEditing: boolean): React.ReactNode => (
+    <div className="flex justify-center gap-2">
+      {isEditing ? (
+        <>
+          <button
+            onClick={() => handleSaveEdit(operationId)}
+            className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+            title="Enregistrer"
+          >
+            <Save className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleCancelEdit}
+            className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+            title="Annuler"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={() => handleEditClick(operationId)}
+          className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+          title="Modifier"
+        >
+          <Edit2 className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+
+  const renderDateSelector = (): React.ReactNode => (
+    <select 
+      value={selectedDate} 
+      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
+      className="w-full md:w-auto p-2 border rounded"
+    >
+      <option value="">Sélectionnez une date</option>
+      {uniqueDates.map(date => (
+        <option key={date} value={date}>{date}</option>
+      ))}
+    </select>
+  );
+
+  const renderTechnicianInput = (): React.ReactNode => (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        type="text"
+        value={newTechnician}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
+        placeholder="Nouveau technicien"
+        className="flex-1 min-w-[200px] p-2 border rounded"
+      />
+      <button
+        onClick={handleAddTechnician}
+        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+                 transition-colors duration-200 whitespace-nowrap"
+        disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
+        title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
+               "Impossible d'ajouter 'Sans technicien'" : ''}
+      >
+        Ajouter Technicien
+      </button>
+    </div>
+  );
+
+  const renderTabButtons = (): React.ReactNode => (
+    <div className="flex flex-wrap gap-2">
+      {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien'].map((title, index) => (
+        <button
+          key={index}
+          onClick={() => setActiveTab(index)}
+          className={`
+            px-4 py-2 rounded-lg transition-all duration-200
+            ${activeTab === index 
+              ? 'bg-blue-500 text-white shadow-md scale-105' 
+              : 'bg-white hover:bg-gray-100'
+            }
+          `}
+        >
+          {title}
+        </button>
+      ))}
+    </div>
+  );
+  // Partie 6 - Visualisations principales
+
+  const renderTable = (dataToRender: string[][]): React.ReactNode => (
+    <div className="w-full">
+      <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
+        <h2 className="text-lg font-semibold">Vue Tableau</h2>
+        <button
+          onClick={handleExportCSV}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
+                   transition-colors duration-200 flex items-center gap-2"
+        >
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            className="h-5 w-5" 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" 
+            />
+          </svg>
+          Exporter en CSV
+        </button>
+      </div>
+
+      <div className="w-full overflow-y-auto">
+        <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+          <thead>
+            {renderTableHeader()}
+          </thead>
+          <tbody className="bg-white">
+            {dataToRender.map((row, rowIndex) => {
+              const operationId = getOperationId(row);
+              const isEditing = editingRow === operationId;
+
+              return (
+                <tr
+                  key={operationId}
+                  className={`
+                    ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                    ${isEditing ? 'bg-yellow-50' : ''}
+                    hover:bg-blue-50
+                  `}
+                >
+                  {row.slice(0, 17).map((cell, cellIndex) => (
+                    <td
+                      key={cellIndex}
+                      className="border border-gray-300 py-2 px-4 text-sm"
+                    >
+                      <div className="truncate">
+                        {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                      </div>
+                    </td>
+                  ))}
+                  <td className="border border-gray-300 py-2 px-4">
+                    {renderActionButtons(operationId, isEditing)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
-};
-// Partie 7 - Rendu principal et export du composant
+
+  const renderGanttChart = (groupBy: string): React.ReactNode => {
+    if (!selectedDate) {
+      return <p>Veuillez sélectionner une date</p>;
+    }
+
+    const BASE_ROW_HEIGHT = 60;
+    const HEADER_HEIGHT = 40;
+    const TASK_HEIGHT = 20;
+    const TASK_MARGIN = 4;
+    const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
+
+    const selectedDateObj = new Date(selectedDate);
+    const filteredDataForDate = filterDataForDate(selectedDate);
+    const { groups = [], groupIndex = 0, labelIndex = 0 } = groupDataByType(groupBy, filteredDataForDate) || {};
+
+    if (!groups.length) {
+      return <p>Aucune donnée à afficher pour cette date</p>;
+    }
+
+    const groupedData: GanttChartData[] = groups.map(group => {
+      const tasks = filteredDataForDate
+        .filter(row => row && row[groupIndex] === group)
+        .map(task => ({
+          task,
+          startPercentage: getTimePercentage(task[3]),
+          duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
+          operationId: getOperationId(task),
+          isMultiDay: task[2] && task[4] && !isSameDay(task[2], task[4]),
+          isStart: task[2] && isSameDay(task[2], selectedDate),
+          isEnd: task[4] && isSameDay(task[4], selectedDate)
+        }));
+
+      const overlaps = detectOverlaps(tasks);
+      const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
+      const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
+
+      return { group, tasks, overlaps, rowHeight };
+    });
+
+    return (
+      <div style={{ overflowX: 'auto', width: '100%' }}>
+        <div style={{ display: 'flex', minWidth: '1000px' }}>
+          {/* Colonne des groupes */}
+          <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
+            <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
+                 className="flex items-center font-bold">
+              {groupBy}
+            </div>
+            {groupedData.map(({ group, rowHeight }, index) => (
+              <div 
+                key={group} 
+                style={{ height: `${rowHeight}px` }}
+                className={`
+                  flex items-center px-2.5 border-b border-gray-200
+                  ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                  ${group === 'Sans technicien' ? 'text-red-500' : ''}
+                `}
+              >
+                {group || 'N/A'}
+              </div>
+            ))}
+          </div>
+
+          {/* Zone de contenu */}
+          <div style={{ flex: 1, position: 'relative' }}>
+            {renderTimeHeader({ HEADER_HEIGHT })}
+            {groupedData.map(({ group, tasks, overlaps, rowHeight }, index) => (
+              <div 
+                key={group}
+                style={{ height: `${rowHeight}px` }}
+                className={`
+                  relative border-b border-gray-200
+                  ${dropZoneActive === group ? 'bg-blue-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                `}
+                onDragOver={groupBy === 'Technicien' ? handleDragOver : undefined}
+                onDragEnter={groupBy === 'Technicien' ? (e) => handleDragEnter(e, group) : undefined}
+                onDragLeave={groupBy === 'Technicien' ? (e) => handleDragLeave(e, group) : undefined}
+                onDrop={groupBy === 'Technicien' ? (e) => handleDrop(group, e) : undefined}
+              >
+                {tasks.map((taskData) => {
+                  const verticalPosition = overlaps.get(taskData.operationId) || 0;
+                  return (
+                    <div
+                      key={`${taskData.operationId}_${selectedDate}`}
+                      draggable={groupBy === 'Technicien'}
+                      onDragStart={(e) => handleDragStart(e, taskData)}
+                      onDragEnd={handleDragEnd}
+                      style={{
+                        position: 'absolute',
+                        left: `${taskData.startPercentage}%`,
+                        width: `${taskData.duration}%`,
+                        height: `${TASK_HEIGHT}px`,
+                        top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+                        backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
+                        borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                        borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined
+                      }}
+                      className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none cursor-grab"
+                    >
+                      {renderGanttTaskContent({
+                        task: taskData.task,
+                        groupBy,
+                        labelIndex
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  // Partie 7 - Rendu principal et export du composant
 
 interface TabContentItem {
   title: string;
   content: React.ReactNode;
 }
 
-const tabContent: TabContentItem[] = [
-  { 
-    title: 'Tableau', 
-    content: renderTable(filteredData) 
-  },
-  {
-    title: 'Vue Véhicule',
-    content: (
-      <div className="space-y-8">
-        {renderDateSelector()}
-        <div className="space-y-6">
-          {/* Section Gantt */}
-          <div className="relative bg-white rounded-lg shadow-sm">
-            {renderGanttChart('Véhicule')}
-          </div>
-
-          {/* Section Tableau */}
-          {selectedDate && (
-            <div className="mt-8 border-t-2 border-gray-200 pt-8">
-              <h3 className="text-lg font-semibold mb-4">
-                Détails des opérations pour le {selectedDate}
-              </h3>
-              {renderTable(filterDataForDate(selectedDate))}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  },
-  {
-    title: 'Vue Lieu',
-    content: (
-      <div className="space-y-8">
-        {renderDateSelector()}
-        <div className="space-y-6">
-          {/* Section Gantt */}
-          <div className="relative bg-white rounded-lg shadow-sm">
-            {renderGanttChart('Lieu')}
-          </div>
-
-          {/* Section Tableau */}
-          {selectedDate && (
-            <div className="mt-8 border-t-2 border-gray-200 pt-8">
-              <h3 className="text-lg font-semibold mb-4">
-                Détails des opérations pour le {selectedDate}
-              </h3>
-              {renderTable(filterDataForDate(selectedDate))}
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  },
-  {
-    title: 'Vue Technicien',
-    content: (
-      <div className="space-y-8">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+  const tabContent: TabContentItem[] = [
+    { 
+      title: 'Tableau', 
+      content: renderTable(filteredData) 
+    },
+    {
+      title: 'Vue Véhicule',
+      content: (
+        <div className="space-y-8">
           {renderDateSelector()}
-          {renderTechnicianInput()}
-        </div>
-
-        <div className="space-y-6">
-          {/* Section Gantt */}
-          <div className="relative bg-white rounded-lg shadow-sm">
-            {renderGanttChart('Technicien')}
-          </div>
-
-          {draggedTask && getDragMessage()}
-
-          <div className="text-sm text-gray-500 italic">
-            Note : Les tâches sans technicien sont affichées en rouge au bas du planning.
-            Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.
-          </div>
-
-          {/* Section Tableau */}
-          {selectedDate && (
-            <div className="mt-8 border-t-2 border-gray-200 pt-8">
-              <h3 className="text-lg font-semibold mb-4">
-                Détails des opérations pour le {selectedDate}
-              </h3>
-              {renderTable(filterDataForDate(selectedDate))}
+          <div className="space-y-6">
+            {/* Section Gantt */}
+            <div className="relative bg-white rounded-lg shadow-sm">
+              {renderGanttChart('Véhicule')}
             </div>
-          )}
+
+            {/* Section Tableau */}
+            {selectedDate && (
+              <div className="mt-8 border-t-2 border-gray-200 pt-8">
+                <h3 className="text-lg font-semibold mb-4">
+                  Détails des opérations pour le {selectedDate}
+                </h3>
+                {renderTable(filterDataForDate(selectedDate))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-    )
-  }
-];
+      )
+    },
+    {
+      title: 'Vue Lieu',
+      content: (
+        <div className="space-y-8">
+          {renderDateSelector()}
+          <div className="space-y-6">
+            {/* Section Gantt */}
+            <div className="relative bg-white rounded-lg shadow-sm">
+              {renderGanttChart('Lieu')}
+            </div>
+
+            {/* Section Tableau */}
+            {selectedDate && (
+              <div className="mt-8 border-t-2 border-gray-200 pt-8">
+                <h3 className="text-lg font-semibold mb-4">
+                  Détails des opérations pour le {selectedDate}
+                </h3>
+                {renderTable(filterDataForDate(selectedDate))}
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'Vue Technicien',
+      content: (
+        <div className="space-y-8">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            {renderDateSelector()}
+            {renderTechnicianInput()}
+          </div>
+
+          <div className="space-y-6">
+            {/* Section Gantt */}
+            <div className="relative bg-white rounded-lg shadow-sm">
+              {renderGanttChart('Technicien')}
+            </div>
+
+            {draggedTask && getDragMessage()}
+
+            <div className="text-sm text-gray-500 italic">
+              Note : Les tâches sans technicien sont affichées en rouge au bas du planning.
+              Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.
+            </div>
+
+            {/* Section Tableau */}
+            {selectedDate && (
+              <div className="mt-8 border-t-2 border-gray-200 pt-8">
+                <h3 className="text-lg font-semibold mb-4">
+                  Détails des opérations pour le {selectedDate}
+                </h3>
+                {renderTable(filterDataForDate(selectedDate))}
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+  ];
 
   // Rendu principal du composant
   return (
