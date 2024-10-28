@@ -275,7 +275,7 @@ const CSVViewer: React.FC = () => {
   }, [data, isSameDay]);
   // Partie 3 - Gestion de l'édition et du groupement
 
-  const handleEditClick = (row: string[]): void => {
+const handleEditClick = (row: string[]): void => {  // Le type doit être string[]
     const operationId = getOperationId(row);
     setEditingRow(operationId);
     const rowData: Record<string, string> = {};
@@ -628,36 +628,36 @@ const CSVViewer: React.FC = () => {
   );
 
 const renderActionButtons = (row: string[], isEditing: boolean): React.ReactNode => (
-  <div className="flex justify-center gap-2">
-    {isEditing ? (
-      <>
+    <div className="flex justify-center gap-2">
+      {isEditing ? (
+        <>
+          <button
+            onClick={() => handleSaveEdit(getOperationId(row))}
+            className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+            title="Enregistrer"
+          >
+            <Save className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleCancelEdit}
+            className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+            title="Annuler"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </>
+      ) : (
         <button
-          onClick={() => handleSaveEdit(getOperationId(row))}
-          className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-          title="Enregistrer"
+          onClick={() => handleEditClick(row)}  // Passez row directement
+          className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+          title="Modifier"
         >
-          <Save className="h-4 w-4" />
+          <Edit2 className="h-4 w-4" />
         </button>
-        <button
-          onClick={handleCancelEdit}
-          className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-          title="Annuler"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </>
-    ) : (
-      <button
-        onClick={() => handleEditClick(row)}
-        className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-        title="Modifier"
-      >
-        <Edit2 className="h-4 w-4" />
-      </button>
-    )}
-  </div>
-);
-
+      )}
+    </div>
+  );
+  
   const renderDateSelector = (): React.ReactNode => (
     <select 
       value={selectedDate} 
