@@ -2,30 +2,20 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
-import { Edit2, Save, X } from 'lucide-react';
+import { Edit2, Save, X, Settings } from 'lucide-react';
 import { Card, CardContent } from '../ui/card';
 
 // Interfaces principales
+interface ColumnVisibility {
+  index: number;
+  visible: boolean;
+  name: string;
+}
+
 interface CSVResult {
   data: string[][];
   errors: any[];
   meta: any;
-}
-
-interface TooltipData {
-  visible: boolean;
-  x: number;
-  y: number;
-  content: {
-    vehicle: string;       // 1ère colonne
-    operation: string;     // 2ème colonne
-    startDateTime: string; // 3ème et 4ème colonnes
-    endDateTime: string;   // 5ème et 6ème colonnes
-    driver: string;        // 12ème colonne
-    location: string;      // 11ème colonne
-    technician: string;    // 16ème colonne
-    comment: string;       // 17ème colonne
-  };
 }
 
 interface DraggedTaskData {
@@ -77,9 +67,8 @@ interface RenderProps {
   groupBy: string;
   labelIndex: number;
 }
-
 const CSVViewer: React.FC = () => {
-  // États avec typage
+  // États du composant
   const [data, setData] = useState<string[][]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -93,21 +82,7 @@ const CSVViewer: React.FC = () => {
   const [dropZoneActive, setDropZoneActive] = useState<string | null>(null);
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const [editedData, setEditedData] = useState<Record<string, string>>({});
-  const [tooltip, setTooltip] = useState<TooltipData>({
-    visible: false,
-    x: 0,
-    y: 0,
-    content: {
-      vehicle: '',
-      operation: '',
-      startDateTime: '',
-      endDateTime: '',
-      driver: '',
-      location: '',
-      technician: '',
-      comment: ''
-    }
-  });
+  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
 
   // Effet pour la touche F7
   useEffect(() => {
@@ -120,6 +95,18 @@ const CSVViewer: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Effet pour l'initialisation des colonnes visibles
+  useEffect(() => {
+    if (headers.length > 0 && columnVisibility.length === 0) {
+      const initialVisibility = headers.map((header, index) => ({
+        index,
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index),
+        name: header
+      }));
+      setColumnVisibility(initialVisibility);
+    }
+  }, [headers]);
 
   // Fonctions utilitaires de base
   const isSameDay = (date1: string, date2: string): boolean => {
@@ -151,186 +138,201 @@ const CSVViewer: React.FC = () => {
     }
   };
 
-  const formatDateTime = (date: string, time: string): string => {
-    if (!date || !time) return 'Non spécifié';
-    return `${date} ${time}`;
+  // Fonctions de gestion des colonnes visibles
+  const handleColumnVisibilityChange = (columnIndex: number) => {
+    setColumnVisibility(prev => 
+      prev.map(col => 
+        col.index === columnIndex 
+          ? { ...col, visible: !col.visible }
+          : col
+      )
+    );
   };
 
-  // ... Suite dans la partie 2
-  // Partie 2 - Gestion des fichiers et données
+  const getVisibleColumns = () => {
+    return columnVisibility
+      .filter(col => col.visible)
+      .map(col => col.index);
+  };
 
+  const resetColumnVisibility = () => {
+    setColumnVisibility(prev => 
+      prev.map((col, index) => ({
+        ...col,
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
+      }))
+    );
+  };
+  // Gestion des fichiers et données
 const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const file = event.target.files?.[0];
+  if (!file) return;
 
-    parse(file, {
-      complete: (results: CSVResult) => {
-        const processedData = results.data.slice(1)
-          .filter((row: string[]) => row.some(cell => cell))
-          .map((row: string[]) => {
-            const updatedRow = [...row];
-            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
+  parse(file, {
+    complete: (results: CSVResult) => {
+      const processedData = results.data.slice(1)
+        .filter((row: string[]) => row.some(cell => cell))
+        .map((row: string[]) => {
+          const updatedRow = [...row];
+          updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
 
-            if (updatedRow[2] && updatedRow[4]) {
-              const startDate = new Date(updatedRow[2]);
-              const endDate = new Date(updatedRow[4]);
-              updatedRow[2] = startDate.toISOString().split('T')[0];
-              updatedRow[4] = endDate.toISOString().split('T')[0];
-            }
-            return updatedRow;
-          });
-
-        setData(processedData);
-        setHeaders(results.data[0]);
-
-        // Utilisation de Set pour les dates et techniciens uniques
-        const allDatesSet = new Set<string>();
-        const technicianSet = new Set<string>();
-
-        processedData.forEach((row: string[]) => {
-          if (row[2] && row[4]) {
-            const startDate = new Date(row[2]);
-            const endDate = new Date(row[4]);
-
-            for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-              allDatesSet.add(date.toISOString().split('T')[0]);
-            }
+          if (updatedRow[2] && updatedRow[4]) {
+            const startDate = new Date(updatedRow[2]);
+            const endDate = new Date(updatedRow[4]);
+            updatedRow[2] = startDate.toISOString().split('T')[0];
+            updatedRow[4] = endDate.toISOString().split('T')[0];
           }
-          if (row[15]) {
-            technicianSet.add(row[15].trim());
-          }
+          return updatedRow;
         });
 
-        // Conversion des Sets en Arrays avec Array.from()
-        const sortedDates = Array.from(allDatesSet)
-          .filter(date => date)
-          .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+      setData(processedData);
+      setHeaders(results.data[0]);
 
-        const sortedTechnicians = Array.from(technicianSet)
-          .filter(tech => tech && tech !== "Sans technicien")
-          .sort((a, b) => a.localeCompare(b));
+      // Utilisation de Set pour les dates et techniciens uniques
+      const allDatesSet = new Set<string>();
+      const technicianSet = new Set<string>();
 
-        if (technicianSet.has("Sans technicien")) {
-          sortedTechnicians.push("Sans technicien");
+      processedData.forEach((row: string[]) => {
+        if (row[2] && row[4]) {
+          const startDate = new Date(row[2]);
+          const endDate = new Date(row[4]);
+
+          for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+            allDatesSet.add(date.toISOString().split('T')[0]);
+          }
         }
-
-        setUniqueDates(sortedDates);
-        setAllTechnicians(sortedTechnicians);
-
-        const initialFilters: Record<string, string> = {};
-        results.data[0].forEach(header => {
-          initialFilters[header] = '';
-        });
-        setFilters(initialFilters);
-      },
-      error: (error: Error) => {
-        console.error('Erreur lors de la lecture du fichier:', error);
-      }
-    });
-  };
-
-  const downloadCSV = (content: string, fileName: string): void => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
-
-  const handleExportCSV = (): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
-    });
-    const fileName = `export_${new Date().toISOString().split('T')[0]}.csv`;
-    downloadCSV(csv, fileName);
-  };
-
-  const handleFilterChange = (header: string, value: string): void => {
-    setFilters(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
-
-  const handleAddTechnician = (): void => {
-    const trimmedTechnician = newTechnician.trim();
-    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
-      setAllTechnicians(prev => {
-        if (prev.includes(trimmedTechnician)) {
-          return prev;
+        if (row[15]) {
+          technicianSet.add(row[15].trim());
         }
-        const technicians = prev.filter(tech => tech !== "Sans technicien");
-        technicians.push(trimmedTechnician);
-        technicians.sort((a, b) => a.localeCompare(b));
-        if (prev.includes("Sans technicien")) {
-          technicians.push("Sans technicien");
-        }
-        return technicians;
       });
-      setNewTechnician('');
-    }
-  };
 
-  const filteredData = data.filter(row => {
-    return headers.every((header, index) => {
-      const filterValue = (filters[header] || '').toLowerCase();
-      const cellValue = (row[index] || '').toString().toLowerCase();
-      return !filterValue || cellValue.includes(filterValue);
-    });
+      // Conversion des Sets en Arrays avec Array.from()
+      const sortedDates = Array.from(allDatesSet)
+        .filter(date => date)
+        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+      const sortedTechnicians = Array.from(technicianSet)
+        .filter(tech => tech && tech !== "Sans technicien")
+        .sort((a, b) => a.localeCompare(b));
+
+      if (technicianSet.has("Sans technicien")) {
+        sortedTechnicians.push("Sans technicien");
+      }
+
+      setUniqueDates(sortedDates);
+      setAllTechnicians(sortedTechnicians);
+
+      const initialFilters: Record<string, string> = {};
+      results.data[0].forEach(header => {
+        initialFilters[header] = '';
+      });
+      setFilters(initialFilters);
+    },
+    error: (error: Error) => {
+      console.error('Erreur lors de la lecture du fichier:', error);
+    }
   });
+};
 
-  const filterDataForDate = useCallback((dateStr: string): string[][] => {
-    if (!dateStr || !data.length) return [];
+const downloadCSV = (content: string, fileName: string): void => {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
 
-    try {
-      const dateObj = new Date(dateStr);
-      dateObj.setHours(0, 0, 0, 0);
+const handleExportCSV = (): void => {
+  const dataToExport = isFiltering ? filteredData : data;
+  const csv = unparse({
+    fields: headers,
+    data: dataToExport
+  });
+  const fileName = `export_${new Date().toISOString().split('T')[0]}.csv`;
+  downloadCSV(csv, fileName);
+};
 
-      return data
-        .filter((row: string[]) => {
-          if (!row[2] || !row[4]) return false;
+const handleFilterChange = (header: string, value: string): void => {
+  setFilters(prev => ({
+    ...prev,
+    [header]: value
+  }));
+};
 
-          try {
-            const startDate = new Date(row[2]);
-            startDate.setHours(0, 0, 0, 0);
-            const endDate = new Date(row[4]);
-            endDate.setHours(23, 59, 59, 999);
-            return startDate <= dateObj && dateObj <= endDate;
-          } catch (err) {
-            console.error('Erreur lors du filtrage des dates:', err);
-            return false;
-          }
-        })
-        .map(row => {
-          const adjustedRow = [...row];
-          const startDate = new Date(adjustedRow[2]);
-          const endDate = new Date(adjustedRow[4]);
-          const currentDate = new Date(dateStr);
+const handleAddTechnician = (): void => {
+  const trimmedTechnician = newTechnician.trim();
+  if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
+    setAllTechnicians(prev => {
+      if (prev.includes(trimmedTechnician)) {
+        return prev;
+      }
+      const technicians = prev.filter(tech => tech !== "Sans technicien");
+      technicians.push(trimmedTechnician);
+      technicians.sort((a, b) => a.localeCompare(b));
+      if (prev.includes("Sans technicien")) {
+        technicians.push("Sans technicien");
+      }
+      return technicians;
+    });
+    setNewTechnician('');
+  }
+};
 
-          if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
-            adjustedRow[3] = '00:00';
-          }
-          if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
-            adjustedRow[5] = '23:59';
-          }
+const filteredData = data.filter(row => {
+  return headers.every((header, index) => {
+    const filterValue = (filters[header] || '').toLowerCase();
+    const cellValue = (row[index] || '').toString().toLowerCase();
+    return !filterValue || cellValue.includes(filterValue);
+  });
+});
 
-          return adjustedRow;
-        });
-    } catch (err) {
-      console.error('Erreur lors du filtrage des données:', err);
-      return [];
-    }
-  }, [data, isSameDay]);
+const filterDataForDate = useCallback((dateStr: string): string[][] => {
+  if (!dateStr || !data.length) return [];
 
-  // ... Suite dans la partie 3
-  // Partie 3 - Gestion de l'édition et du groupement
+  try {
+    const dateObj = new Date(dateStr);
+    dateObj.setHours(0, 0, 0, 0);
 
+    return data
+      .filter((row: string[]) => {
+        if (!row[2] || !row[4]) return false;
+
+        try {
+          const startDate = new Date(row[2]);
+          startDate.setHours(0, 0, 0, 0);
+          const endDate = new Date(row[4]);
+          endDate.setHours(23, 59, 59, 999);
+          return startDate <= dateObj && dateObj <= endDate;
+        } catch (err) {
+          console.error('Erreur lors du filtrage des dates:', err);
+          return false;
+        }
+      })
+      .map(row => {
+        const adjustedRow = [...row];
+        const startDate = new Date(adjustedRow[2]);
+        const endDate = new Date(adjustedRow[4]);
+        const currentDate = new Date(dateStr);
+
+        if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
+          adjustedRow[3] = '00:00';
+        }
+        if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
+          adjustedRow[5] = '23:59';
+        }
+
+        return adjustedRow;
+      });
+  } catch (err) {
+    console.error('Erreur lors du filtrage des données:', err);
+    return [];
+  }
+}, [data, isSameDay]);
+// Gestion de l'édition
 const handleEditClick = (row: string[]): void => {
   const operationId = getOperationId(row);
   setEditingRow(operationId);
@@ -362,6 +364,7 @@ const handleInputChange = (header: string, value: string): void => {
   }));
 };
 
+// Groupement des données
 const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): {
   groups: string[];
   groupIndex: number;
@@ -457,243 +460,153 @@ const detectOverlaps = (tasks: Array<{
   return overlaps;
 };
 
-const handleTaskHover = useCallback(
-  (event: React.MouseEvent, task: TaskData, show: boolean): void => {
-    if (show) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const scrollY = window.scrollY || window.pageYOffset;
-      const scrollX = window.scrollX || window.pageXOffset;
+// Rendu des cellules
+const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
+  const operationId = getOperationId(row);
+  const isEditing = editingRow === operationId;
 
-      let x = rect.left + scrollX;
-      let y = rect.bottom + scrollY + 5;
-
-      // Ajuster la position si le tooltip sort de l'écran
-      const tooltipWidth = 300;
-      const tooltipHeight = 200;
-
-      if (x + tooltipWidth > window.innerWidth + scrollX) {
-        x = window.innerWidth + scrollX - tooltipWidth - 10;
-      }
-
-      if (y + tooltipHeight > window.innerHeight + scrollY) {
-        y = rect.top + scrollY - tooltipHeight - 5;
-      }
-
-      setTooltip({
-        visible: true,
-        x,
-        y,
-        content: {
-          vehicle: task.task[0] || 'Non spécifié',      // 1ère colonne
-          operation: task.task[1] || 'Non spécifié',    // 2ème colonne
-          startDateTime: `${task.task[2] || 'Non spécifié'} ${task.task[3] || ''}`, // 3ème et 4ème colonnes
-          endDateTime: `${task.task[4] || 'Non spécifié'} ${task.task[5] || ''}`,   // 5ème et 6ème colonnes
-          driver: task.task[11] || 'Non spécifié',      // 12ème colonne
-          location: task.task[10] || 'Non spécifié',    // 11ème colonne
-          technician: task.task[15] || 'Non spécifié',  // 16ème colonne
-          comment: task.task[16] || 'Aucun commentaire' // 17ème colonne
-        }
-      });
-    } else {
-      setTooltip(prev => ({ ...prev, visible: false }));
+  if (isEditing) {
+    if (header.toLowerCase().includes('date')) {
+      return (
+        <input
+          type="date"
+          value={editedData[header] || ''}
+          onChange={(e) => handleInputChange(header, e.target.value)}
+          className="w-full p-1 border rounded"
+        />
+      );
     }
-  },
-  []
-);
-
-// ... Suite dans la partie 4
-// Partie 4 - Gestion du drag & drop
-
-const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
-    e.stopPropagation();
-    // Masquer le tooltip pendant le drag
-    setTooltip(prev => ({ ...prev, visible: false }));
-
-    const taskData: DraggedTaskData = {
-      ...task,
-      date: selectedDate,
-      operationId: getOperationId(task.task),
-      startDate: task.task[2],
-      endDate: task.task[4],
-      originalTechnician: task.task[15],
-      startPercentage: task.startPercentage,
-      duration: task.duration
-    };
-
-    setDraggedTask(taskData);
-
-    // Créer un élément fantôme pour le drag
-    const ghostElement = document.createElement('div');
-    ghostElement.style.width = '100px';
-    ghostElement.style.height = '30px';
-    ghostElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    ghostElement.style.position = 'absolute';
-    ghostElement.style.top = '-1000px';
-    document.body.appendChild(ghostElement);
-
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setDragImage(ghostElement, 50, 15);
-
-    // Nettoyage de l'élément fantôme
-    requestAnimationFrame(() => {
-      document.body.removeChild(ghostElement);
-    });
-  };
-
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDropZoneActive(technicianId);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (dropZoneActive === technicianId) {
-      setDropZoneActive(null);
-    }
-  }, [dropZoneActive]);
-
-  const handleDragEnd = useCallback((): void => {
-    setDraggedTask(null);
-    setDropZoneActive(null);
-  }, []);
-
-  const handleDrop = useCallback((newTechnician: string, e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!draggedTask || !draggedTask.operationId) {
-      setDropZoneActive(null);
-      return;
-    }
-
-    const { operationId, startDate, endDate, originalTechnician } = draggedTask;
-    const selectedDateObj = new Date(selectedDate);
-    const startDateObj = new Date(startDate);
-    const endDateObj = new Date(endDate);
-
-    // Vérification des dates
-    if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
-      console.log("Impossible de déplacer une tâche en dehors de sa période");
-      setDropZoneActive(null);
-      setDraggedTask(null);
-      return;
-    }
-
-    // Vérification du technicien
-    if (originalTechnician === newTechnician) {
-      setDropZoneActive(null);
-      return;
-    }
-
-    // Mise à jour de l'assignation
-    updateAssignment(operationId, newTechnician);
-    setDropZoneActive(null);
-    setDraggedTask(null);
-  }, [draggedTask, selectedDate, updateAssignment]);
-
-  const getDatesRange = (startDate: string, endDate: string): string[] => {
-    const dates: string[] = [];
-    const currentDate = new Date(startDate);
-    const lastDate = new Date(endDate);
-
-    while (currentDate <= lastDate) {
-      dates.push(currentDate.toISOString().split('T')[0]);
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    return dates;
-  };
-
-  const getDragMessage = (): React.ReactNode => {
-    if (!draggedTask) return null;
-
     return (
-      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-        {draggedTask.task[2] !== selectedDate ? (
-          <span className="text-red-600">
-            Impossible de déplacer une tâche d'un autre jour ({draggedTask.task[2]})
-          </span>
-        ) : (
-          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
-        )}
-      </div>
+      <input
+        type="text"
+        value={editedData[header] || ''}
+        onChange={(e) => handleInputChange(header, e.target.value)}
+        className="w-full p-1 border rounded"
+      />
     );
-  };
-
-  // Fonction pour vérifier si la tâche est en cours de glisser-déposer
-  const isTaskBeingDragged = useCallback((taskId: string): boolean => {
-    return draggedTask?.operationId === taskId;
-  }, [draggedTask]);
-
-  // Fonction pour vérifier si on peut déposer la tâche
-  const canDropTask = useCallback((newTechnician: string): boolean => {
-    if (!draggedTask) return false;
-    
-    const selectedDateObj = new Date(selectedDate);
-    const startDateObj = new Date(draggedTask.startDate);
-    const endDateObj = new Date(draggedTask.endDate);
-
-    return (
-      selectedDateObj >= startDateObj &&
-      selectedDateObj <= endDateObj &&
-      draggedTask.originalTechnician !== newTechnician
-    );
-  }, [draggedTask, selectedDate]);
-
-  // Fonction pour gérer le survol pendant le drag
-  const handleDragHover = useCallback((technicianId: string, isHovering: boolean): void => {
-    if (!draggedTask || !canDropTask(technicianId)) return;
-
-    if (isHovering) {
-      setDropZoneActive(technicianId);
-    } else if (dropZoneActive === technicianId) {
-      setDropZoneActive(null);
-    }
-  }, [draggedTask, canDropTask, dropZoneActive]);
-
-// ... Suite dans la partie 5
-// Partie 5 - Composants d'interface
-
-const Tooltip: React.FC<{ data: TooltipData }> = ({ data }) => {
-  if (!data.visible) return null;
-
-  return (
-    <div
-      className="fixed z-[9999] bg-gray-900/95 text-white p-4 rounded-lg shadow-xl text-sm"
-      style={{
-        left: `${data.x}px`,
-        top: `${data.y}px`,
-        maxWidth: '400px',
-        backdropFilter: 'blur(8px)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        pointerEvents: 'none'
-      }}
-    >
-      <div className="grid gap-2">
-        <div><span className="font-semibold text-gray-300">Véhicule :</span> {data.content.vehicle}</div>
-        <div><span className="font-semibold text-gray-300">Opération :</span> {data.content.operation}</div>
-        <div><span className="font-semibold text-gray-300">Date et heure de début :</span> {data.content.startDateTime}</div>
-        <div><span className="font-semibold text-gray-300">Date et heure de fin :</span> {data.content.endDateTime}</div>
-        <div><span className="font-semibold text-gray-300">Conducteur :</span> {data.content.driver}</div>
-        <div><span className="font-semibold text-gray-300">Lieu :</span> {data.content.location}</div>
-        <div><span className="font-semibold text-gray-300">Technicien :</span> {data.content.technician}</div>
-        {data.content.comment && (
-          <div className="mt-2 pt-2 border-t border-gray-700">
-            <span className="font-semibold text-gray-300">Commentaire :</span>
-            <p className="mt-1 text-gray-100">{data.content.comment}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  }
+  return cell || '';
 };
+// Gestion du drag & drop
+const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
+  e.stopPropagation();
+  const taskData: DraggedTaskData = {
+    ...task,
+    date: selectedDate,
+    operationId: getOperationId(task.task),
+    startDate: task.task[2],
+    endDate: task.task[4],
+    originalTechnician: task.task[15],
+    startPercentage: task.startPercentage,
+    duration: task.duration
+  };
+
+  setDraggedTask(taskData);
+
+  const ghostElement = document.createElement('div');
+  ghostElement.style.width = '100px';
+  ghostElement.style.height = '30px';
+  ghostElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  ghostElement.style.position = 'absolute';
+  ghostElement.style.top = '-1000px';
+  document.body.appendChild(ghostElement);
+
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setDragImage(ghostElement, 50, 15);
+
+  requestAnimationFrame(() => {
+    document.body.removeChild(ghostElement);
+  });
+};
+
+const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}, []);
+
+const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
+  e.preventDefault();
+  e.stopPropagation();
+  setDropZoneActive(technicianId);
+}, []);
+
+const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (dropZoneActive === technicianId) {
+    setDropZoneActive(null);
+  }
+}, [dropZoneActive]);
+
+const handleDragEnd = useCallback((): void => {
+  setDraggedTask(null);
+  setDropZoneActive(null);
+}, []);
+
+const handleDrop = useCallback((newTechnician: string, e: React.DragEvent<HTMLDivElement>): void => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (!draggedTask || !draggedTask.operationId) {
+    setDropZoneActive(null);
+    return;
+  }
+
+  const { operationId, startDate, endDate, originalTechnician } = draggedTask;
+  const selectedDateObj = new Date(selectedDate);
+  const startDateObj = new Date(startDate);
+  const endDateObj = new Date(endDate);
+
+  if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
+    console.log("Impossible de déplacer une tâche en dehors de sa période");
+    setDropZoneActive(null);
+    setDraggedTask(null);
+    return;
+  }
+
+  if (originalTechnician === newTechnician) {
+    setDropZoneActive(null);
+    return;
+  }
+
+  updateAssignment(operationId, newTechnician);
+  setDropZoneActive(null);
+  setDraggedTask(null);
+}, [draggedTask, selectedDate, updateAssignment]);
+
+// Composants d'interface
+const renderSettings = (): React.ReactNode => (
+  <Card>
+    <CardContent className="space-y-4 p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Paramètres d'affichage</h2>
+        <button
+          onClick={resetColumnVisibility}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Réinitialiser
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {columnVisibility.map((col) => (
+          <div key={col.index} className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id={`col-${col.index}`}
+              checked={col.visible}
+              onChange={() => handleColumnVisibilityChange(col.index)}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <label htmlFor={`col-${col.index}`} className="text-sm">
+              {col.name}
+            </label>
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+);
 
 const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
   <div style={{ 
@@ -744,63 +657,21 @@ const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps,
   return task[labelIndex] || 'N/A';
 };
 
-const renderTableHeader = (): React.ReactNode => (
-  <tr>
-    {headers.slice(0, 17).map((header, index) => (
-      <th
-        key={index}
-        className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
-      >
-        <div className="flex flex-col gap-1">
-          <span className="truncate">{header}</span>
-          {isFiltering && (
-            <input
-              type="text"
-              value={filters[header] || ''}
-              onChange={(e) => handleFilterChange(header, e.target.value)}
-              placeholder={`Filtrer ${header}`}
-              className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
-            />
-          )}
-        </div>
-      </th>
-    ))}
-    <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
-      Actions
-    </th>
-  </tr>
-);
+const getDragMessage = (): React.ReactNode => {
+  if (!draggedTask) return null;
 
-const renderActionButtons = (row: string[], isEditing: boolean): React.ReactNode => (
-  <div className="flex justify-center gap-2">
-    {isEditing ? (
-      <>
-        <button
-          onClick={() => handleSaveEdit(getOperationId(row))}
-          className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-          title="Enregistrer"
-        >
-          <Save className="h-4 w-4" />
-        </button>
-        <button
-          onClick={handleCancelEdit}
-          className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-          title="Annuler"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </>
-    ) : (
-      <button
-        onClick={() => handleEditClick(row)}
-        className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-        title="Modifier"
-      >
-        <Edit2 className="h-4 w-4" />
-      </button>
-    )}
-  </div>
-);
+  return (
+    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+      {draggedTask.task[2] !== selectedDate ? (
+        <span className="text-red-600">
+          Impossible de déplacer une tâche d'un autre jour ({draggedTask.task[2]})
+        </span>
+      ) : (
+        "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
+      )}
+    </div>
+  );
+};
 
 const renderDateSelector = (): React.ReactNode => (
   <select 
@@ -814,120 +685,119 @@ const renderDateSelector = (): React.ReactNode => (
     ))}
   </select>
 );
+// Rendu du tableau
+const renderTableHeader = (): React.ReactNode => {
+  const visibleColumns = getVisibleColumns();
+  
+  return (
+    <tr>
+      {headers.map((header, index) => {
+        if (!visibleColumns.includes(index)) return null;
+        
+        return (
+          <th
+            key={index}
+            className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
+          >
+            <div className="flex flex-col gap-1">
+              <span className="truncate">{header}</span>
+              {isFiltering && (
+                <input
+                  type="text"
+                  value={filters[header] || ''}
+                  onChange={(e) => handleFilterChange(header, e.target.value)}
+                  placeholder={`Filtrer ${header}`}
+                  className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
+                />
+              )}
+            </div>
+          </th>
+        );
+      })}
+      <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
+        Actions
+      </th>
+    </tr>
+  );
+};
 
-const renderTechnicianInput = (): React.ReactNode => (
-  <div className="flex flex-wrap items-center gap-2">
-    <input
-      type="text"
-      value={newTechnician}
-      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
-      placeholder="Nouveau technicien"
-      className="flex-1 min-w-[200px] p-2 border rounded"
-    />
-    <button
-      onClick={handleAddTechnician}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-               transition-colors duration-200 whitespace-nowrap"
-      disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
-      title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
-             "Impossible d'ajouter 'Sans technicien'" : ''}
-    >
-      Ajouter Technicien
-    </button>
-  </div>
-);
-
-const renderTabButtons = (): React.ReactNode => (
-  <div className="flex flex-wrap gap-2">
-    {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien'].map((title, index) => (
-      <button
-        key={index}
-        onClick={() => setActiveTab(index)}
-        className={`
-          px-4 py-2 rounded-lg transition-all duration-200
-          ${activeTab === index 
-            ? 'bg-blue-500 text-white shadow-md scale-105' 
-            : 'bg-white hover:bg-gray-100'
-          }
-        `}
-      >
-        {title}
-      </button>
-    ))}
-  </div>
-);
-
-// ... Suite dans la partie 6
-// Partie 6 - Visualisations principales
-
-const renderTable = (dataToRender: string[][]): React.ReactNode => (
-  <div className="w-full">
-    <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
-      <h2 className="text-lg font-semibold">Vue Tableau</h2>
-      <button
-        onClick={handleExportCSV}
-        className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
-                 transition-colors duration-200 flex items-center gap-2"
-      >
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          className="h-5 w-5" 
-          fill="none" 
-          viewBox="0 0 24 24" 
-          stroke="currentColor"
+const renderTable = (dataToRender: string[][]): React.ReactNode => {
+  const visibleColumns = getVisibleColumns();
+  
+  return (
+    <div className="w-full">
+      <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
+        <h2 className="text-lg font-semibold">Vue Tableau</h2>
+        <button
+          onClick={handleExportCSV}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
+                   transition-colors duration-200 flex items-center gap-2"
         >
-          <path 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
-            strokeWidth={2} 
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" 
-          />
-        </svg>
-        Exporter en CSV
-      </button>
-    </div>
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            className="h-5 w-5" 
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+          >
+            <path 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              strokeWidth={2} 
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" 
+            />
+          </svg>
+          Exporter en CSV
+        </button>
+      </div>
 
-    <div className="w-full overflow-y-auto">
-      <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-        <thead>
-          {renderTableHeader()}
-        </thead>
-        <tbody className="bg-white">
-          {dataToRender.map((row, rowIndex) => {
-            const operationId = getOperationId(row);
-            const isEditing = editingRow === operationId;
+      <div className="w-full overflow-y-auto">
+        <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+          <thead>
+            {renderTableHeader()}
+          </thead>
+          <tbody className="bg-white">
+            {dataToRender.map((row, rowIndex) => {
+              const operationId = getOperationId(row);
+              const isEditing = editingRow === operationId;
 
-            return (
-              <tr
-                key={operationId}
-                className={`
-                  ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
-                  ${isEditing ? 'bg-yellow-50' : ''}
-                  hover:bg-blue-50
-                `}
-              >
-                {row.slice(0, 17).map((cell, cellIndex) => (
-                  <td
-                    key={cellIndex}
-                    className="border border-gray-300 py-2 px-4 text-sm"
-                  >
-                    <div className="truncate">
-                      {renderCell(row, cell, headers[cellIndex], cellIndex)}
-                    </div>
+              return (
+                <tr
+                  key={operationId}
+                  className={`
+                    ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                    ${isEditing ? 'bg-yellow-50' : ''}
+                    hover:bg-blue-50
+                  `}
+                >
+                  {row.map((cell, cellIndex) => {
+                    if (!visibleColumns.includes(cellIndex)) return null;
+                    
+                    return (
+                      <td
+                        key={cellIndex}
+                        className="border border-gray-300 py-2 px-4 text-sm"
+                      >
+                        <div className="truncate">
+                          {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  <td className="border border-gray-300 py-2 px-4">
+                    {renderActionButtons(row, isEditing)}
                   </td>
-                ))}
-                <td className="border border-gray-300 py-2 px-4">
-                  {renderActionButtons(row, isEditing)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
+// Rendu du Gantt Chart
 const renderGanttChart = (groupBy: string): React.ReactNode => {
   if (!selectedDate) {
     return <p>Veuillez sélectionner une date</p>;
@@ -939,7 +809,6 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
   const TASK_MARGIN = 4;
   const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
 
-  const selectedDateObj = new Date(selectedDate);
   const filteredDataForDate = filterDataForDate(selectedDate);
   const { groups = [], groupIndex = 0, labelIndex = 0 } = groupDataByType(groupBy, filteredDataForDate) || {};
 
@@ -981,10 +850,7 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
 
   return (
     <div style={{ overflowX: 'auto', width: '100%' }}>
-      <div style={{ display: 'flex', minWidth: '1000px', position: 'relative' }}>
-        {/* Composant Tooltip - en dehors des zones de scroll */}
-        <Tooltip data={tooltip} />
-        
+      <div style={{ display: 'flex', minWidth: '1000px' }}>
         {/* Colonne des groupes */}
         <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
           <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
@@ -1024,46 +890,32 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
             >
               {tasks.map((taskData) => {
                 const verticalPosition = overlaps.get(taskData.operationId) || 0;
-                const isDragging = isTaskBeingDragged(taskData.operationId);
-  
                 return (
                   <div
                     key={`${taskData.operationId}_${selectedDate}`}
                     draggable={groupBy === 'Technicien'}
                     onDragStart={(e) => handleDragStart(e, taskData)}
                     onDragEnd={handleDragEnd}
-                    onMouseEnter={(e) => {
-                      e.stopPropagation(); // Empêcher la propagation de l'événement
-                      handleTaskHover(e, taskData, true);
-                  }}
-                  onMouseLeave={(e) => {
-                    e.stopPropagation(); // Empêcher la propagation de l'événement
-                    handleTaskHover(e, taskData, false);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    left: `${taskData.startPercentage}%`,
-                    width: `${taskData.duration}%`,
-                    height: `${TASK_HEIGHT}px`,
-                    top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                    backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
-                    borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                    borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                    opacity: isDragging ? 0.5 : 1,
-                    cursor: 'pointer',
-                    zIndex: 1
-                  }}
-                  className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap 
-                             transition-all duration-200 hover:ring-2 hover:ring-white hover:z-10"
-                >
-                  {renderGanttTaskContent({
-                    task: taskData.task,
-                    groupBy,
-                    labelIndex
-                  })}
-                </div>
-            );
-          })}
+                    style={{
+                      position: 'absolute',
+                      left: `${taskData.startPercentage}%`,
+                      width: `${taskData.duration}%`,
+                      height: `${TASK_HEIGHT}px`,
+                      top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+                      backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
+                      borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined
+                    }}
+                    className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none cursor-grab"
+                  >
+                    {renderGanttTaskContent({
+                      task: taskData.task,
+                      groupBy,
+                      labelIndex
+                    })}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -1071,16 +923,83 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
     </div>
   );
 };
+// Configuration des onglets et rendu principal
+const renderActionButtons = (row: string[], isEditing: boolean): React.ReactNode => (
+  <div className="flex justify-center gap-2">
+    {isEditing ? (
+      <>
+        <button
+          onClick={() => handleSaveEdit(getOperationId(row))}
+          className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+          title="Enregistrer"
+        >
+          <Save className="h-4 w-4" />
+        </button>
+        <button
+          onClick={handleCancelEdit}
+          className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+          title="Annuler"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </>
+    ) : (
+      <button
+        onClick={() => handleEditClick(row)}
+        className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+        title="Modifier"
+      >
+        <Edit2 className="h-4 w-4" />
+      </button>
+    )}
+  </div>
+);
 
-// ... Suite dans la partie 7
-// Partie 7 - Rendu principal et export du composant
+const renderTechnicianInput = (): React.ReactNode => (
+  <div className="flex flex-wrap items-center gap-2">
+    <input
+      type="text"
+      value={newTechnician}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
+      placeholder="Nouveau technicien"
+      className="flex-1 min-w-[200px] p-2 border rounded"
+    />
+    <button
+      onClick={handleAddTechnician}
+      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+               transition-colors duration-200 whitespace-nowrap"
+      disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
+      title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
+             "Impossible d'ajouter 'Sans technicien'" : ''}
+    >
+      Ajouter Technicien
+    </button>
+  </div>
+);
 
-interface TabContentItem {
-  title: string;
-  content: React.ReactNode;
-}
+const renderTabButtons = (): React.ReactNode => (
+  <div className="flex flex-wrap gap-2">
+    {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
+      <button
+        key={index}
+        onClick={() => setActiveTab(index)}
+        className={`
+          px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
+          ${activeTab === index 
+            ? 'bg-blue-500 text-white shadow-md scale-105' 
+            : 'bg-white hover:bg-gray-100'
+          }
+        `}
+      >
+        {title === 'Paramètres' && <Settings className="h-4 w-4" />}
+        {title}
+      </button>
+    ))}
+  </div>
+);
 
-const tabContent: TabContentItem[] = [
+// Configuration du contenu des onglets
+const tabContent = [
   { 
     title: 'Tableau', 
     content: renderTable(filteredData) 
@@ -1091,12 +1010,9 @@ const tabContent: TabContentItem[] = [
       <div className="space-y-8">
         {renderDateSelector()}
         <div className="space-y-6">
-          {/* Section Gantt */}
           <div className="relative bg-white rounded-lg shadow-sm">
             {renderGanttChart('Véhicule')}
           </div>
-
-          {/* Section Tableau */}
           {selectedDate && (
             <div className="mt-8 border-t-2 border-gray-200 pt-8">
               <h3 className="text-lg font-semibold mb-4">
@@ -1115,12 +1031,9 @@ const tabContent: TabContentItem[] = [
       <div className="space-y-8">
         {renderDateSelector()}
         <div className="space-y-6">
-          {/* Section Gantt */}
           <div className="relative bg-white rounded-lg shadow-sm">
             {renderGanttChart('Lieu')}
           </div>
-
-          {/* Section Tableau */}
           {selectedDate && (
             <div className="mt-8 border-t-2 border-gray-200 pt-8">
               <h3 className="text-lg font-semibold mb-4">
@@ -1141,22 +1054,15 @@ const tabContent: TabContentItem[] = [
           {renderDateSelector()}
           {renderTechnicianInput()}
         </div>
-
         <div className="space-y-6">
-          {/* Section Gantt */}
           <div className="relative bg-white rounded-lg shadow-sm">
             {renderGanttChart('Technicien')}
           </div>
-
           {draggedTask && getDragMessage()}
-
           <div className="text-sm text-gray-500 italic">
             Note : Les tâches sans technicien sont affichées en rouge au bas du planning.
             Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.
-            Survolez une tâche pour voir plus de détails.
           </div>
-
-          {/* Section Tableau */}
           {selectedDate && (
             <div className="mt-8 border-t-2 border-gray-200 pt-8">
               <h3 className="text-lg font-semibold mb-4">
@@ -1168,6 +1074,10 @@ const tabContent: TabContentItem[] = [
         </div>
       </div>
     )
+  },
+  {
+    title: 'Paramètres',
+    content: renderSettings()
   }
 ];
 
@@ -1183,52 +1093,18 @@ return (
           accept=".csv" 
           className="flex-1"
         />
-        {data.length > 0 && (
-          <span className="text-sm text-gray-500">
-            {data.length} enregistrements chargés
-          </span>
-        )}
       </div>
 
       {/* Onglets */}
-      {data.length > 0 && renderTabButtons()}
+      {renderTabButtons()}
     </div>
-
-    {/* Message d'instruction initial */}
-    {data.length === 0 && (
-      <div className="text-center p-8 bg-white rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-2">Bienvenue dans le visualisateur de planning</h2>
-        <p className="text-gray-600">
-          Commencez par charger un fichier CSV contenant vos données de planning.
-        </p>
-      </div>
-    )}
 
     {/* Contenu principal */}
-    {data.length > 0 && (
-      <Card>
-        <CardContent>
-          {tabContent[activeTab].content}
-        </CardContent>
-      </Card>
-    )}
-
-    {/* Messages de statut et d'aide */}
-    <div className="mt-4 text-sm text-gray-500">
-      {isFiltering && (
-        <div className="bg-blue-50 p-3 rounded-lg mb-2">
-          Mode filtrage actif (F7 pour désactiver)
-        </div>
-      )}
-      {selectedDate && activeTab !== 0 && (
-        <div className="bg-gray-50 p-3 rounded-lg">
-          <div>Astuce : Survolez les tâches pour voir plus de détails</div>
-          <div className="mt-1">
-            Les informations affichées incluent : véhicule, opération, horaires, conducteur, lieu, technicien et commentaires
-          </div>
-        </div>
-      )}
-    </div>
+    <Card>
+      <CardContent>
+        {tabContent[activeTab].content}
+      </CardContent>
+    </Card>
   </div>
 );
 };
@@ -1238,5 +1114,3 @@ const MemoizedCSVViewer = React.memo(CSVViewer);
 
 // Export par défaut du composant
 export default MemoizedCSVViewer;
-
-  
