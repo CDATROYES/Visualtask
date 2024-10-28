@@ -32,7 +32,12 @@ interface TaskData {
   isStart: boolean;
   isEnd: boolean;
 }
-
+interface GanttChartData {
+  group: string;
+  tasks: TaskData[];
+  overlaps: Map<string, number>;
+  rowHeight: number;
+}
 interface EditingActions {
   row: string[];
   cell: string;
