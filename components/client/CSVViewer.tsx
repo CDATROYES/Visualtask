@@ -32,9 +32,18 @@ interface TaskData {
   isStart: boolean;
   isEnd: boolean;
 }
+
 interface GanttChartData {
   group: string;
-  tasks: TaskData[];
+  tasks: Array<{
+    task: string[];
+    startPercentage: number;
+    duration: number;
+    operationId: string;
+    isMultiDay: boolean;
+    isStart: boolean;
+    isEnd: boolean;
+  }>;
   overlaps: Map<string, number>;
   rowHeight: number;
 }
@@ -786,120 +795,127 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => (
     </div>
   </div>
 );
-  const renderGanttChart = (groupBy: string): React.ReactNode => {
-    if (!selectedDate) {
-      return <p>Veuillez sélectionner une date</p>;
-    }
+const renderGanttChart = (groupBy: string): React.ReactNode => {
+  if (!selectedDate) {
+    return <p>Veuillez sélectionner une date</p>;
+  }
 
-    const BASE_ROW_HEIGHT = 60;
-    const HEADER_HEIGHT = 40;
-    const TASK_HEIGHT = 20;
-    const TASK_MARGIN = 4;
-    const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
+  const BASE_ROW_HEIGHT = 60;
+  const HEADER_HEIGHT = 40;
+  const TASK_HEIGHT = 20;
+  const TASK_MARGIN = 4;
+  const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
 
-    const selectedDateObj = new Date(selectedDate);
-    const filteredDataForDate = filterDataForDate(selectedDate);
-    const { groups = [], groupIndex = 0, labelIndex = 0 } = groupDataByType(groupBy, filteredDataForDate) || {};
+  const selectedDateObj = new Date(selectedDate);
+  const filteredDataForDate = filterDataForDate(selectedDate);
+  const { groups = [], groupIndex = 0, labelIndex = 0 } = groupDataByType(groupBy, filteredDataForDate) || {};
 
-    if (!groups.length) {
-      return <p>Aucune donnée à afficher pour cette date</p>;
-    }
+  if (!groups.length) {
+    return <p>Aucune donnée à afficher pour cette date</p>;
+  }
 
-    const groupedData: GanttChartData[] = groups.map(group => {
-      const tasks = filteredDataForDate
-        .filter(row => row && row[groupIndex] === group)
-        .map(task => ({
-          task,
-          startPercentage: getTimePercentage(task[3]),
-          duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
-          operationId: getOperationId(task),
-          isMultiDay: task[2] && task[4] && !isSameDay(task[2], task[4]),
-          isStart: task[2] && isSameDay(task[2], selectedDate),
-          isEnd: task[4] && isSameDay(task[4], selectedDate)
-        }));
+  // Création des données groupées avec le typage correct
+  const groupedData: GanttChartData[] = groups.map(group => {
+    // Création des tâches pour chaque groupe avec le typage TaskData
+    const tasks: TaskData[] = filteredDataForDate
+      .filter(row => row && row[groupIndex] === group)
+      .map(task => ({
+        task,
+        startPercentage: getTimePercentage(task[3]),
+        duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
+        operationId: getOperationId(task),
+        isMultiDay: task[2] && task[4] && !isSameDay(task[2], task[4]),
+        isStart: task[2] && isSameDay(task[2], selectedDate),
+        isEnd: task[4] && isSameDay(task[4], selectedDate)
+      }));
 
-      const overlaps = detectOverlaps(tasks);
-      const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
-      const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
+    const overlaps = detectOverlaps(tasks);
+    const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
+    const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
 
-      return { group, tasks, overlaps, rowHeight };
-    });
+    return {
+      group,
+      tasks,
+      overlaps,
+      rowHeight
+    };
+  });
 
-    return (
-      <div style={{ overflowX: 'auto', width: '100%' }}>
-        <div style={{ display: 'flex', minWidth: '1000px' }}>
-          {/* Colonne des groupes */}
-          <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
-            <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
-                 className="flex items-center font-bold">
-              {groupBy}
+  return (
+    <div style={{ overflowX: 'auto', width: '100%' }}>
+      <div style={{ display: 'flex', minWidth: '1000px' }}>
+        {/* Colonne des groupes */}
+        <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
+          <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
+               className="flex items-center font-bold">
+            {groupBy}
+          </div>
+          {groupedData.map(({ group, rowHeight }, index) => (
+            <div 
+              key={group} 
+              style={{ height: `${rowHeight}px` }}
+              className={`
+                flex items-center px-2.5 border-b border-gray-200
+                ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                ${group === 'Sans technicien' ? 'text-red-500' : ''}
+              `}
+            >
+              {group || 'N/A'}
             </div>
-            {groupedData.map(({ group, rowHeight }, index) => (
-              <div 
-                key={group} 
-                style={{ height: `${rowHeight}px` }}
-                className={`
-                  flex items-center px-2.5 border-b border-gray-200
-                  ${index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                  ${group === 'Sans technicien' ? 'text-red-500' : ''}
-                `}
-              >
-                {group || 'N/A'}
-              </div>
-            ))}
-          </div>
+          ))}
+        </div>
 
-          {/* Zone de contenu */}
-          <div style={{ flex: 1, position: 'relative' }}>
-            {renderTimeHeader({ HEADER_HEIGHT })}
-            {groupedData.map(({ group, tasks, overlaps, rowHeight }, index) => (
-              <div 
-                key={group}
-                style={{ height: `${rowHeight}px` }}
-                className={`
-                  relative border-b border-gray-200
-                  ${dropZoneActive === group ? 'bg-blue-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                `}
-                onDragOver={groupBy === 'Technicien' ? handleDragOver : undefined}
-                onDragEnter={groupBy === 'Technicien' ? (e) => handleDragEnter(e, group) : undefined}
-                onDragLeave={groupBy === 'Technicien' ? (e) => handleDragLeave(e, group) : undefined}
-                onDrop={groupBy === 'Technicien' ? (e) => handleDrop(group, e) : undefined}
-              >
-                {tasks.map((taskData) => {
-                  const verticalPosition = overlaps.get(taskData.operationId) || 0;
-                  return (
-                    <div
-                      key={`${taskData.operationId}_${selectedDate}`}
-                      draggable={groupBy === 'Technicien'}
-                      onDragStart={(e) => handleDragStart(e, taskData)}
-                      onDragEnd={handleDragEnd}
-                      style={{
-                        position: 'absolute',
-                        left: `${taskData.startPercentage}%`,
-                        width: `${taskData.duration}%`,
-                        height: `${TASK_HEIGHT}px`,
-                        top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                        backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
-                        borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                        borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined
-                      }}
-                      className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none cursor-grab"
-                    >
-                      {renderGanttTaskContent({
-                        task: taskData.task,
-                        groupBy,
-                        labelIndex
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+        {/* Zone de contenu */}
+        <div style={{ flex: 1, position: 'relative' }}>
+          {renderTimeHeader({ HEADER_HEIGHT })}
+          {groupedData.map(({ group, tasks, overlaps, rowHeight }, index) => (
+            <div 
+              key={group}
+              style={{ height: `${rowHeight}px` }}
+              className={`
+                relative border-b border-gray-200
+                ${dropZoneActive === group ? 'bg-blue-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+              `}
+              onDragOver={groupBy === 'Technicien' ? handleDragOver : undefined}
+              onDragEnter={groupBy === 'Technicien' ? (e) => handleDragEnter(e, group) : undefined}
+              onDragLeave={groupBy === 'Technicien' ? (e) => handleDragLeave(e, group) : undefined}
+              onDrop={groupBy === 'Technicien' ? (e) => handleDrop(group, e) : undefined}
+            >
+              {tasks.map((taskData) => {
+                const verticalPosition = overlaps.get(taskData.operationId) || 0;
+                return (
+                  <div
+                    key={`${taskData.operationId}_${selectedDate}`}
+                    draggable={groupBy === 'Technicien'}
+                    onDragStart={(e) => handleDragStart(e, taskData)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      position: 'absolute',
+                      left: `${taskData.startPercentage}%`,
+                      width: `${taskData.duration}%`,
+                      height: `${TASK_HEIGHT}px`,
+                      top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+                      backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
+                      borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined
+                    }}
+                    className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none cursor-grab"
+                  >
+                    {renderGanttTaskContent({
+                      task: taskData.task,
+                      groupBy,
+                      labelIndex
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
-    );
-  };
+    </div>
+  );
+};
   // Partie 7 - Rendu principal et export du composant
 
 interface TabContentItem {
