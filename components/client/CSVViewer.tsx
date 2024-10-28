@@ -83,8 +83,9 @@ const CSVViewer: React.FC = () => {
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const [editedData, setEditedData] = useState<Record<string, string>>({});
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
+  const [selectedTask, setSelectedTask] = useState<string | null>(null);
 
-  // Effet pour la touche F7
+  // Effets
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F7') {
@@ -96,7 +97,6 @@ const CSVViewer: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Effet pour l'initialisation des colonnes visibles
   useEffect(() => {
     if (headers.length > 0 && columnVisibility.length === 0) {
       const initialVisibility = headers.map((header, index) => ({
@@ -162,6 +162,11 @@ const CSVViewer: React.FC = () => {
         visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
       }))
     );
+  };
+
+  // Fonction de gestion du clic sur une tâche
+  const handleTaskClick = (operationId: string) => {
+    setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
   // Gestion des fichiers et données
 const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -290,14 +295,14 @@ const filteredData = data.filter(row => {
   });
 });
 
-const filterDataForDate = useCallback((dateStr: string): string[][] => {
+const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
   if (!dateStr || !data.length) return [];
 
   try {
     const dateObj = new Date(dateStr);
     dateObj.setHours(0, 0, 0, 0);
 
-    return data
+    const filteredByDate = data
       .filter((row: string[]) => {
         if (!row[2] || !row[4]) return false;
 
@@ -327,6 +332,13 @@ const filterDataForDate = useCallback((dateStr: string): string[][] => {
 
         return adjustedRow;
       });
+
+    // Appliquer le filtre par opération si un operationId est spécifié
+    if (operationId) {
+      return filteredByDate.filter(row => getOperationId(row) === operationId);
+    }
+
+    return filteredByDate;
   } catch (err) {
     console.error('Erreur lors du filtrage des données:', err);
     return [];
@@ -460,33 +472,6 @@ const detectOverlaps = (tasks: Array<{
   return overlaps;
 };
 
-// Rendu des cellules
-const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
-  const operationId = getOperationId(row);
-  const isEditing = editingRow === operationId;
-
-  if (isEditing) {
-    if (header.toLowerCase().includes('date')) {
-      return (
-        <input
-          type="date"
-          value={editedData[header] || ''}
-          onChange={(e) => handleInputChange(header, e.target.value)}
-          className="w-full p-1 border rounded"
-        />
-      );
-    }
-    return (
-      <input
-        type="text"
-        value={editedData[header] || ''}
-        onChange={(e) => handleInputChange(header, e.target.value)}
-        className="w-full p-1 border rounded"
-      />
-    );
-  }
-  return cell || '';
-};
 // Gestion du drag & drop
 const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
   e.stopPropagation();
@@ -573,8 +558,34 @@ const handleDrop = useCallback((newTechnician: string, e: React.DragEvent<HTMLDi
   setDropZoneActive(null);
   setDraggedTask(null);
 }, [draggedTask, selectedDate, updateAssignment]);
+// Composants d'interface de base
+const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
+  const operationId = getOperationId(row);
+  const isEditing = editingRow === operationId;
 
-// Composants d'interface
+  if (isEditing) {
+    if (header.toLowerCase().includes('date')) {
+      return (
+        <input
+          type="date"
+          value={editedData[header] || ''}
+          onChange={(e) => handleInputChange(header, e.target.value)}
+          className="w-full p-1 border rounded"
+        />
+      );
+    }
+    return (
+      <input
+        type="text"
+        value={editedData[header] || ''}
+        onChange={(e) => handleInputChange(header, e.target.value)}
+        className="w-full p-1 border rounded"
+      />
+    );
+  }
+  return cell || '';
+};
+
 const renderSettings = (): React.ReactNode => (
   <Card>
     <CardContent className="space-y-4 p-6">
@@ -657,18 +668,19 @@ const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps,
   return task[labelIndex] || 'N/A';
 };
 
-const getDragMessage = (): React.ReactNode => {
-  if (!draggedTask) return null;
+const renderFilterReset = (): React.ReactNode => {
+  if (!selectedTask) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-      {draggedTask.task[2] !== selectedDate ? (
-        <span className="text-red-600">
-          Impossible de déplacer une tâche d'un autre jour ({draggedTask.task[2]})
-        </span>
-      ) : (
-        "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
-      )}
+    <div className="flex items-center justify-end mb-4">
+      <button
+        onClick={() => setSelectedTask(null)}
+        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
+                 transition-colors duration-200 flex items-center gap-2"
+      >
+        <X className="h-4 w-4" />
+        Réinitialiser le filtre
+      </button>
     </div>
   );
 };
@@ -685,6 +697,44 @@ const renderDateSelector = (): React.ReactNode => (
     ))}
   </select>
 );
+
+const renderTechnicianInput = (): React.ReactNode => (
+  <div className="flex flex-wrap items-center gap-2">
+    <input
+      type="text"
+      value={newTechnician}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
+      placeholder="Nouveau technicien"
+      className="flex-1 min-w-[200px] p-2 border rounded"
+    />
+    <button
+      onClick={handleAddTechnician}
+      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+               transition-colors duration-200 whitespace-nowrap"
+      disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
+      title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
+             "Impossible d'ajouter 'Sans technicien'" : ''}
+    >
+      Ajouter Technicien
+    </button>
+  </div>
+);
+
+const getDragMessage = (): React.ReactNode => {
+  if (!draggedTask) return null;
+
+  return (
+    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+      {draggedTask.task[2] !== selectedDate ? (
+        <span className="text-red-600">
+          Impossible de déplacer une tâche d'un autre jour ({draggedTask.task[2]})
+        </span>
+      ) : (
+        "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
+      )}
+    </div>
+  );
+};
 // Rendu du tableau
 const renderTableHeader = (): React.ReactNode => {
   const visibleColumns = getVisibleColumns();
@@ -785,7 +835,34 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
                     );
                   })}
                   <td className="border border-gray-300 py-2 px-4">
-                    {renderActionButtons(row, isEditing)}
+                    <div className="flex justify-center gap-2">
+                      {isEditing ? (
+                        <>
+                          <button
+                            onClick={() => handleSaveEdit(operationId)}
+                            className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+                            title="Enregistrer"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                            title="Annuler"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleEditClick(row)}
+                          className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+                          title="Modifier"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -896,6 +973,7 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
                     draggable={groupBy === 'Technicien'}
                     onDragStart={(e) => handleDragStart(e, taskData)}
                     onDragEnd={handleDragEnd}
+                    onClick={() => handleTaskClick(taskData.operationId)}
                     style={{
                       position: 'absolute',
                       left: `${taskData.startPercentage}%`,
@@ -904,9 +982,13 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
                       top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
                       backgroundColor: getUniqueColor(tasks.indexOf(taskData)),
                       borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined
+                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                      cursor: 'pointer',
+                      outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
+                      boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
                     }}
-                    className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none cursor-grab"
+                    className="rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none 
+                             hover:brightness-90 transition-all duration-200"
                   >
                     {renderGanttTaskContent({
                       task: taskData.task,
@@ -923,60 +1005,7 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
     </div>
   );
 };
-// Configuration des onglets et rendu principal
-const renderActionButtons = (row: string[], isEditing: boolean): React.ReactNode => (
-  <div className="flex justify-center gap-2">
-    {isEditing ? (
-      <>
-        <button
-          onClick={() => handleSaveEdit(getOperationId(row))}
-          className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-          title="Enregistrer"
-        >
-          <Save className="h-4 w-4" />
-        </button>
-        <button
-          onClick={handleCancelEdit}
-          className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-          title="Annuler"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </>
-    ) : (
-      <button
-        onClick={() => handleEditClick(row)}
-        className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-        title="Modifier"
-      >
-        <Edit2 className="h-4 w-4" />
-      </button>
-    )}
-  </div>
-);
-
-const renderTechnicianInput = (): React.ReactNode => (
-  <div className="flex flex-wrap items-center gap-2">
-    <input
-      type="text"
-      value={newTechnician}
-      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
-      placeholder="Nouveau technicien"
-      className="flex-1 min-w-[200px] p-2 border rounded"
-    />
-    <button
-      onClick={handleAddTechnician}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-               transition-colors duration-200 whitespace-nowrap"
-      disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
-      title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
-             "Impossible d'ajouter 'Sans technicien'" : ''}
-    >
-      Ajouter Technicien
-    </button>
-  </div>
-);
-
+// Configuration des onglets et rendu final
 const renderTabButtons = (): React.ReactNode => (
   <div className="flex flex-wrap gap-2">
     {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
@@ -998,7 +1027,42 @@ const renderTabButtons = (): React.ReactNode => (
   </div>
 );
 
-// Configuration du contenu des onglets
+const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
+  <div className="space-y-8">
+    <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+      {renderDateSelector()}
+      {showTechnicianInput && renderTechnicianInput()}
+    </div>
+
+    <div className="space-y-6">
+      <div className="relative bg-white rounded-lg shadow-sm">
+        {renderGanttChart(groupBy)}
+      </div>
+      
+      {draggedTask && getDragMessage()}
+      
+      {showTechnicianInput && (
+        <div className="text-sm text-gray-500 italic">
+          Note : Les tâches sans technicien sont affichées en rouge au bas du planning.
+          Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.
+        </div>
+      )}
+
+      {selectedDate && (
+        <div className="mt-8 border-t-2 border-gray-200 pt-8">
+          {renderFilterReset()}
+          <h3 className="text-lg font-semibold mb-4">
+            {selectedTask 
+              ? "Détails de l'opération sélectionnée"
+              : `Détails des opérations pour le ${selectedDate}`}
+          </h3>
+          {renderTable(filterDataForDate(selectedDate, selectedTask))}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
 const tabContent = [
   { 
     title: 'Tableau', 
@@ -1006,74 +1070,15 @@ const tabContent = [
   },
   {
     title: 'Vue Véhicule',
-    content: (
-      <div className="space-y-8">
-        {renderDateSelector()}
-        <div className="space-y-6">
-          <div className="relative bg-white rounded-lg shadow-sm">
-            {renderGanttChart('Véhicule')}
-          </div>
-          {selectedDate && (
-            <div className="mt-8 border-t-2 border-gray-200 pt-8">
-              <h3 className="text-lg font-semibold mb-4">
-                Détails des opérations pour le {selectedDate}
-              </h3>
-              {renderTable(filterDataForDate(selectedDate))}
-            </div>
-          )}
-        </div>
-      </div>
-    )
+    content: renderGanttView('Véhicule')
   },
   {
     title: 'Vue Lieu',
-    content: (
-      <div className="space-y-8">
-        {renderDateSelector()}
-        <div className="space-y-6">
-          <div className="relative bg-white rounded-lg shadow-sm">
-            {renderGanttChart('Lieu')}
-          </div>
-          {selectedDate && (
-            <div className="mt-8 border-t-2 border-gray-200 pt-8">
-              <h3 className="text-lg font-semibold mb-4">
-                Détails des opérations pour le {selectedDate}
-              </h3>
-              {renderTable(filterDataForDate(selectedDate))}
-            </div>
-          )}
-        </div>
-      </div>
-    )
+    content: renderGanttView('Lieu')
   },
   {
     title: 'Vue Technicien',
-    content: (
-      <div className="space-y-8">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-          {renderDateSelector()}
-          {renderTechnicianInput()}
-        </div>
-        <div className="space-y-6">
-          <div className="relative bg-white rounded-lg shadow-sm">
-            {renderGanttChart('Technicien')}
-          </div>
-          {draggedTask && getDragMessage()}
-          <div className="text-sm text-gray-500 italic">
-            Note : Les tâches sans technicien sont affichées en rouge au bas du planning.
-            Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.
-          </div>
-          {selectedDate && (
-            <div className="mt-8 border-t-2 border-gray-200 pt-8">
-              <h3 className="text-lg font-semibold mb-4">
-                Détails des opérations pour le {selectedDate}
-              </h3>
-              {renderTable(filterDataForDate(selectedDate))}
-            </div>
-          )}
-        </div>
-      </div>
-    )
+    content: renderGanttView('Technicien', true)
   },
   {
     title: 'Paramètres',
