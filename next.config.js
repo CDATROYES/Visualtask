@@ -5,6 +5,12 @@ const nextConfig = {
   env: {
     CI: 'false'
   },
+  // Déplacer optimizeFonts à la racine
+  optimizeFonts: true,
+  experimental: {
+    forceSwcTransforms: true,
+    esmExternals: false
+  },
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -12,13 +18,6 @@ const nextConfig = {
     };
     return config;
   },
-  experimental: {
-    // Désactivez temporairement optimizeFonts si nécessaire
-    optimizeFonts: false,
-    // Ajoutez ces options si nécessaire
-    forceSwcTransforms: true,
-    esmExternals: false
-  }
 }
 
 module.exports = nextConfig
