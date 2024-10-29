@@ -27,6 +27,7 @@ interface DraggedTaskData {
   originalTechnician: string;
   startPercentage: number;
   duration: number;
+  hasDefinedHours: boolean;
 }
 
 interface TaskData {
@@ -38,6 +39,7 @@ interface TaskData {
   isStart: boolean;
   isEnd: boolean;
   isUnassigned?: boolean;
+  hasDefinedHours?: boolean;
 }
 
 interface GanttChartData {
@@ -140,6 +142,25 @@ const CSVViewer: React.FC = () => {
     }
   };
 
+  const hasDefinedHours = (task: string[]): boolean => {
+    return Boolean(task[3] && task[5]); // Vérifie si les heures de début et de fin sont définies
+  };
+
+  // Fonction pour assigner une date à une tâche
+  const assignDateToTask = (task: string[], targetDate: string): string[] => {
+    const updatedTask = [...task];
+    updatedTask[2] = targetDate; // Date de début
+    updatedTask[4] = targetDate; // Date de fin
+
+    // Conserver les heures existantes si elles sont présentes
+    if (!updatedTask[3] || !updatedTask[5]) {
+      updatedTask[3] = '08:00';    // Heure de début par défaut
+      updatedTask[5] = '09:00';    // Heure de fin par défaut (1 heure plus tard)
+    }
+
+    return updatedTask;
+  };
+
   // Fonctions de gestion des colonnes visibles
   const handleColumnVisibilityChange = (columnIndex: number) => {
     setColumnVisibility(prev => 
@@ -169,16 +190,6 @@ const CSVViewer: React.FC = () => {
   // Fonction de gestion du clic sur une tâche
   const handleTaskClick = (operationId: string) => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
-  };
-
-  // Fonction pour assigner une date à une tâche
-  const assignDateToTask = (task: string[], targetDate: string): string[] => {
-    const updatedTask = [...task];
-    updatedTask[2] = targetDate;  // Date de début
-    updatedTask[3] = '08:00';     // Heure de début par défaut
-    updatedTask[4] = targetDate;  // Date de fin
-    updatedTask[5] = '09:00';     // Heure de fin par défaut (1 heure plus tard)
-    return updatedTask;
   };
   // Gestion des fichiers et données
 const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -503,7 +514,8 @@ const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): vo
     endDate: task.task[4] || null,
     originalTechnician: task.task[15],
     startPercentage: task.startPercentage,
-    duration: task.duration
+    duration: task.duration,
+    hasDefinedHours: hasDefinedHours(task.task)
   };
 
   setDraggedTask(taskData);
@@ -595,195 +607,238 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
   setDropZoneActive(null);
   setDraggedTask(null);
 }, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
-// Composants d'interface de base
-const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
+// Gestion de l'édition
+const handleEditClick = (row: string[]): void => {
   const operationId = getOperationId(row);
-  const isEditing = editingRow === operationId;
+  setEditingRow(operationId);
+  const rowData: Record<string, string> = {};
+  headers.forEach((header, index) => {
+    rowData[header] = row[index] || '';
+  });
+  setEditedData(rowData);
+};
 
-  if (isEditing) {
-    if (header.toLowerCase().includes('date')) {
-      return (
-        <input
-          type="date"
-          value={editedData[header] || ''}
-          onChange={(e) => handleInputChange(header, e.target.value)}
-          className="w-full p-1 border rounded"
-        />
-      );
+const handleCancelEdit = (): void => {
+  setEditingRow(null);
+  setEditedData({});
+};
+
+const handleSaveEdit = (operationId: string): void => {
+  const updatedRow = headers.map(header => editedData[header] || '');
+  setData(prevData => 
+    prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
+  );
+  setEditingRow(null);
+  setEditedData({});
+};
+
+const handleInputChange = (header: string, value: string): void => {
+  setEditedData(prev => ({
+    ...prev,
+    [header]: value
+  }));
+};
+
+// Groupement des données
+const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
+  let groupIndex: number;
+  let labelIndex: number;
+  let groups: string[] = [];
+  
+  // Séparer les tâches non affectées
+  const unassignedTasks = data.filter(row => !row[2] || !row[4]);
+
+  switch (groupBy) {
+    case 'Véhicule':
+      groupIndex = 0;
+      labelIndex = 1;
+      groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+        .filter(Boolean)
+        .sort();
+      break;
+    case 'Lieu':
+      groupIndex = 10;
+      labelIndex = 1;
+      groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+        .filter(Boolean)
+        .sort();
+      break;
+    case 'Technicien':
+      groupIndex = 15;
+      labelIndex = 15;
+      groups = allTechnicians;
+      break;
+    default:
+      return { groups: [], groupIndex: 0, labelIndex: 0, unassignedTasks: [] };
+  }
+
+  // Ajouter le groupe "Non affectées" s'il y a des tâches non affectées
+  if (unassignedTasks.length > 0) {
+    groups.push("Non affectées");
+  }
+
+  return { groups, groupIndex, labelIndex, unassignedTasks };
+}, [allTechnicians, data]);
+
+const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+  setData(prevData => {
+    return prevData.map(row => {
+      if (getOperationId(row) === operationId) {
+        const newRow = [...row];
+        newRow[15] = newTechnician;
+        return newRow;
+      }
+      return row;
+    });
+  });
+}, []);
+
+const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (a.startPercentage === b.startPercentage) {
+      return (b.startPercentage + b.duration) - (a.startPercentage + a.duration);
     }
-    return (
-      <input
-        type="text"
-        value={editedData[header] || ''}
-        onChange={(e) => handleInputChange(header, e.target.value)}
-        className="w-full p-1 border rounded"
-      />
-    );
+    return a.startPercentage - b.startPercentage;
+  });
+
+  const overlaps = new Map<string, number>();
+  const timeSlots = new Map<string, string>();
+
+  for (let i = 0; i < sortedTasks.length; i++) {
+    const currentTask = sortedTasks[i];
+    const currentId = getOperationId(currentTask.task);
+    const start = currentTask.startPercentage;
+    const end = start + currentTask.duration;
+
+    let level = 0;
+    let foundSlot = false;
+
+    while (!foundSlot) {
+      foundSlot = true;
+      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+        const timeKey = `${level}_${time}`;
+        if (timeSlots.has(timeKey)) {
+          foundSlot = false;
+          level++;
+          break;
+        }
+      }
+    }
+
+    for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+      timeSlots.set(`${level}_${time}`, currentId);
+    }
+
+    overlaps.set(currentId, level);
   }
-  return cell || '';
+
+  return overlaps;
 };
 
-const renderSettings = (): React.ReactNode => (
-  <Card>
-    <CardContent className="space-y-4 p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Paramètres d'affichage</h2>
-        <button
-          onClick={resetColumnVisibility}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Réinitialiser
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {columnVisibility.map((col) => (
-          <div key={col.index} className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id={`col-${col.index}`}
-              checked={col.visible}
-              onChange={() => handleColumnVisibilityChange(col.index)}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-            />
-            <label htmlFor={`col-${col.index}`} className="text-sm">
-              {col.name}
-            </label>
-          </div>
-        ))}
-      </div>
-    </CardContent>
-  </Card>
-);
+// Gestion du drag & drop
+const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
+  e.stopPropagation();
+  const taskData: DraggedTaskData = {
+    ...task,
+    date: selectedDate,
+    operationId: getOperationId(task.task),
+    startDate: task.task[2] || null,
+    endDate: task.task[4] || null,
+    originalTechnician: task.task[15],
+    startPercentage: task.startPercentage,
+    duration: task.duration,
+    hasDefinedHours: hasDefinedHours(task.task)
+  };
 
-const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
-  <div style={{ 
-    height: `${HEADER_HEIGHT}px`, 
-    borderBottom: '2px solid #333', 
-    backgroundColor: '#f0f0f0', 
-    position: 'relative'
-  }}>
-    {Array.from({ length: 24 }).map((_, index) => (
-      <div key={index} style={{ 
-        position: 'absolute', 
-        left: `${index * (100 / 24)}%`, 
-        height: '100%', 
-        borderLeft: '1px solid #ccc',
-        width: '1px'
-      }}>
-        <span style={{ 
-          position: 'absolute', 
-          bottom: '5px', 
-          left: '-15px', 
-          fontSize: '12px',
-          width: '30px',
-          textAlign: 'center'
-        }}>
-          {`${index.toString().padStart(2, '0')}:00`}
-        </span>
-      </div>
-    ))}
-  </div>
-);
+  setDraggedTask(taskData);
 
-const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
-  if (!task) return null;
-  
-  // Pour les tâches non affectées, afficher un style spécial
-  const isUnassigned = !task[2] || !task[4];
-  
-  if (groupBy === 'Technicien') {
-    return (
-      <div className="flex items-center gap-1 w-full overflow-hidden">
-        <span className="truncate">
-          {`${task[0] || 'N/A'} - ${task[1] || 'N/A'}`}
-        </span>
-        {isUnassigned ? (
-          <span className="flex-shrink-0 text-xs bg-yellow-200 text-yellow-800 px-1 rounded">
-            Non planifiée
-          </span>
-        ) : task[2] && task[4] && !isSameDay(task[2], task[4]) && (
-          <span className="flex-shrink-0 text-xs bg-blue-200 text-blue-800 px-1 rounded">
-            Multi-jours
-          </span>
-        )}
-      </div>
-    );
+  const ghostElement = document.createElement('div');
+  ghostElement.style.width = '100px';
+  ghostElement.style.height = '30px';
+  ghostElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  ghostElement.style.position = 'absolute';
+  ghostElement.style.top = '-1000px';
+  document.body.appendChild(ghostElement);
+
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setDragImage(ghostElement, 50, 15);
+
+  requestAnimationFrame(() => {
+    document.body.removeChild(ghostElement);
+  });
+};
+
+const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}, []);
+
+const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
+  e.preventDefault();
+  e.stopPropagation();
+  setDropZoneActive(technicianId);
+}, []);
+
+const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (dropZoneActive === technicianId) {
+    setDropZoneActive(null);
   }
-  return task[labelIndex] || 'N/A';
-};
+}, [dropZoneActive]);
 
-const renderFilterReset = (): React.ReactNode => {
-  if (!selectedTask) return null;
+const handleDragEnd = useCallback((): void => {
+  setDraggedTask(null);
+  setDropZoneActive(null);
+}, []);
 
-  return (
-    <div className="flex items-center justify-end mb-4">
-      <button
-        onClick={() => setSelectedTask(null)}
-        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
-                 transition-colors duration-200 flex items-center gap-2"
-      >
-        <X className="h-4 w-4" />
-        Réinitialiser le filtre
-      </button>
-    </div>
-  );
-};
+const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
+  e.preventDefault();
+  e.stopPropagation();
 
-const renderDateSelector = (): React.ReactNode => (
-  <select 
-    value={selectedDate} 
-    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
-    className="w-full md:w-auto p-2 border rounded"
-  >
-    <option value="">Sélectionnez une date</option>
-    {uniqueDates.map(date => (
-      <option key={date} value={date}>{date}</option>
-    ))}
-  </select>
-);
+  if (!draggedTask || !draggedTask.operationId) {
+    setDropZoneActive(null);
+    return;
+  }
 
-const renderTechnicianInput = (): React.ReactNode => (
-  <div className="flex flex-wrap items-center gap-2">
-    <input
-      type="text"
-      value={newTechnician}
-      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
-      placeholder="Nouveau technicien"
-      className="flex-1 min-w-[200px] p-2 border rounded"
-    />
-    <button
-      onClick={handleAddTechnician}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-               transition-colors duration-200 whitespace-nowrap"
-      disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
-      title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
-             "Impossible d'ajouter 'Sans technicien'" : ''}
-    >
-      Ajouter Technicien
-    </button>
-  </div>
-);
+  const { operationId, task: draggedTaskData, startDate, endDate, originalTechnician } = draggedTask;
+  const isUnassignedTask = !startDate || !endDate;
 
-const getDragMessage = (): React.ReactNode => {
-  if (!draggedTask) return null;
+  if (isUnassignedTask) {
+    const updatedTask = assignDateToTask(draggedTaskData, selectedDate);
+    
+    if (targetGroup !== "Non affectées") {
+      updatedTask[15] = targetGroup;
+    }
 
-  const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
+    setData(prevData => 
+      prevData.map(row => 
+        getOperationId(row) === operationId ? updatedTask : row
+      )
+    );
+  } else {
+    const selectedDateObj = new Date(selectedDate);
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
 
-  return (
-    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-      {isUnassigned ? (
-        "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
-      ) : draggedTask.task[2] !== selectedDate ? (
-        <span className="text-red-600">
-          Impossible de déplacer une tâche en dehors de sa période ({draggedTask.task[2]})
-        </span>
-      ) : (
-        "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
-      )}
-    </div>
-  );
-};
+    if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
+      console.log("Impossible de déplacer une tâche en dehors de sa période");
+      setDropZoneActive(null);
+      setDraggedTask(null);
+      return;
+    }
+
+    if (originalTechnician === targetGroup) {
+      setDropZoneActive(null);
+      return;
+    }
+
+    updateAssignment(operationId, targetGroup);
+  }
+
+  setDropZoneActive(null);
+  setDraggedTask(null);
+}, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
 // Rendu du tableau
 const renderTableHeader = (): React.ReactNode => {
   const visibleColumns = getVisibleColumns();
@@ -849,6 +904,7 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
               const operationId = getOperationId(row);
               const isEditing = editingRow === operationId;
               const isUnassigned = !row[2] || !row[4];
+              const hasHours = hasDefinedHours(row);
 
               return (
                 <tr
@@ -856,7 +912,7 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
                   className={`
                     ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
                     ${isEditing ? 'bg-yellow-50' : ''}
-                    ${isUnassigned ? 'bg-yellow-50' : ''}
+                    ${isUnassigned ? hasHours ? 'bg-blue-50' : 'bg-yellow-50' : ''}
                     hover:bg-blue-50
                   `}
                 >
@@ -938,16 +994,22 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
     
     if (group === "Non affectées") {
       // Pour les tâches non affectées
-      tasks = unassignedTasks.map(task => ({
-        task,
-        startPercentage: 33.33, // 8h du matin en pourcentage
-        duration: 4.17,         // 1 heure en pourcentage
-        operationId: getOperationId(task),
-        isMultiDay: false,
-        isStart: true,
-        isEnd: true,
-        isUnassigned: true
-      }));
+      tasks = unassignedTasks.map(task => {
+        const taskHasDefinedHours = hasDefinedHours(task);
+        return {
+          task,
+          startPercentage: taskHasDefinedHours ? getTimePercentage(task[3]) : 33.33,
+          duration: taskHasDefinedHours ? 
+            Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])) : 
+            4.17,
+          operationId: getOperationId(task),
+          isMultiDay: false,
+          isStart: true,
+          isEnd: true,
+          isUnassigned: true,
+          hasDefinedHours: taskHasDefinedHours
+        };
+      });
     } else {
       // Pour les tâches normales
       tasks = filteredDataForDate
@@ -966,7 +1028,8 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
             isMultiDay,
             isStart,
             isEnd,
-            isUnassigned: false
+            isUnassigned: false,
+            hasDefinedHours: hasDefinedHours(task)
           };
         });
     }
@@ -984,7 +1047,9 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
     };
   });
 
-  return (
+  // ... Suite du rendu du Gantt dans la prochaine partie ...
+  // Suite du rendu du Gantt Chart
+return (
     <div style={{ overflowX: 'auto', width: '100%' }}>
       <div style={{ display: 'flex', minWidth: '1000px' }}>
         {/* Colonne des groupes */}
@@ -1041,7 +1106,9 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
                       width: `${taskData.duration}%`,
                       height: `${TASK_HEIGHT}px`,
                       top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                      backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
+                      backgroundColor: taskData.isUnassigned ? 
+                        (taskData.hasDefinedHours ? '#93C5FD' : '#FCD34D') : 
+                        getUniqueColor(tasks.indexOf(taskData)),
                       borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
                       borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
                       cursor: 'pointer',
@@ -1049,9 +1116,9 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
                       boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
                     }}
                     className={`
-                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
+                      rounded px-1 text-xs overflow-hidden whitespace-nowrap select-none
                       hover:brightness-90 transition-all duration-200
-                      ${taskData.isUnassigned ? 'text-black' : ''}
+                      ${taskData.isUnassigned ? 'text-black' : 'text-white'}
                     `}
                   >
                     {renderGanttTaskContent({
@@ -1069,27 +1136,6 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
     </div>
   );
 };
-// Configuration des onglets et rendu final
-const renderTabButtons = (): React.ReactNode => (
-  <div className="flex flex-wrap gap-2">
-    {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
-      <button
-        key={index}
-        onClick={() => setActiveTab(index)}
-        className={`
-          px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
-          ${activeTab === index 
-            ? 'bg-blue-500 text-white shadow-md scale-105' 
-            : 'bg-white hover:bg-gray-100'
-          }
-        `}
-      >
-        {title === 'Paramètres' && <Settings className="h-4 w-4" />}
-        {title}
-      </button>
-    ))}
-  </div>
-);
 
 const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
   <div className="space-y-8">
@@ -1110,7 +1156,8 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) 
           <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
         )}
         <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
-        <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
+        <p>Les tâches non planifiées avec heures définies sont en bleu clair.</p>
+        <p>Les tâches non planifiées sans heures définies sont en jaune.</p>
       </div>
 
       {selectedDate && (
@@ -1128,6 +1175,7 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) 
   </div>
 );
 
+// Configuration des onglets
 const tabContent = [
   { 
     title: 'Tableau', 
@@ -1184,3 +1232,4 @@ const MemoizedCSVViewer = React.memo(CSVViewer);
 
 // Export par défaut du composant
 export default MemoizedCSVViewer;
+  
