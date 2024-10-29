@@ -740,6 +740,75 @@ const getDragMessage = useCallback((): React.ReactNode => {
   );
 }, [draggedTask, selectedDate]);
 // Composants de rendu principaux
+const renderTable = (dataToRender: string[][]): React.ReactNode => {
+  const visibleColumns = getVisibleColumns();
+  
+  return (
+    <div className="w-full">
+      <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
+        <h2 className="text-lg font-semibold">Vue Tableau</h2>
+        <button
+          onClick={handleExportCSV}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
+                   transition-colors duration-200 flex items-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Exporter en CSV
+        </button>
+      </div>
+
+      <div className="w-full overflow-y-auto">
+        <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+          <thead>
+            {renderTableHeader()}
+          </thead>
+          <tbody className="bg-white">
+            {dataToRender.map((row, rowIndex) => {
+              const operationId = getOperationId(row);
+              const isEditing = editingRow === operationId;
+              const isUnassigned = !row[ColumnIndex.StartDate] || !row[ColumnIndex.EndDate];
+              const hasHours = hasDefinedHours(row);
+
+              return (
+                <tr
+                  key={operationId}
+                  className={`
+                    ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                    ${isEditing ? 'bg-yellow-50' : ''}
+                    ${isUnassigned ? hasHours ? 'bg-blue-50' : 'bg-yellow-50' : ''}
+                    hover:bg-blue-50
+                  `}
+                >
+                  {row.map((cell, cellIndex) => {
+                    if (!visibleColumns.includes(cellIndex)) return null;
+                    
+                    return (
+                      <td
+                        key={cellIndex}
+                        className="border border-gray-300 py-2 px-4 text-sm"
+                      >
+                        <div className="truncate">
+                          {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  <td className="border border-gray-300 py-2 px-4">
+                    {renderActionButtons(row, isEditing)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+  
 const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
   const operationId = getOperationId(row);
   const isEditing = editingRow === operationId;
