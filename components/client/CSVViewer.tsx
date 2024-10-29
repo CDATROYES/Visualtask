@@ -630,11 +630,6 @@ const handleInputChange = (header: string, value: string): void => {
   }));
 };
 
-// Groupement des données
-const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
-  let groupIndex: number;
-  let labelIndex: number;
-  let groups: string[] = [];
   
   // Séparer les tâches non affectées
   const unassignedTasks = data.filter(row => !row[2] || !row[4]);
