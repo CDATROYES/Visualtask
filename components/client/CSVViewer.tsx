@@ -71,6 +71,7 @@ interface RenderProps {
 
 // Début du composant principal
 const CSVViewer: React.FC = () => {
+  // Le contenu du composant commence ici...
   // États du composant
   const [data, setData] = useState<string[][]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -110,6 +111,32 @@ const CSVViewer: React.FC = () => {
       setColumnVisibility(initialVisibility);
     }
   }, [headers]);
+
+  // Fonction utilitaire pour mettre à jour l'assignation d'une tâche
+  // Définie ici car utilisée dans handleDrop et d'autres fonctions
+  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+    setData(prevData => {
+      return prevData.map(row => {
+        if (getOperationId(row) === operationId) {
+          const newRow = [...row];
+          newRow[15] = newTechnician;
+          return newRow;
+        }
+        return row;
+      });
+    });
+  }, []);
+
+  // Fonction pour assigner une date à une tâche
+  // Définie ici car utilisée dans handleDrop
+  const assignDateToTask = (task: string[], targetDate: string): string[] => {
+    const updatedTask = [...task];
+    updatedTask[2] = targetDate;  // Date de début
+    updatedTask[3] = '08:00';     // Heure de début par défaut
+    updatedTask[4] = targetDate;  // Date de fin
+    updatedTask[5] = '09:00';     // Heure de fin par défaut (1 heure plus tard)
+    return updatedTask;
+  };
   // Fonctions utilitaires de base
   const isSameDay = (date1: string, date2: string): boolean => {
     if (!date1 || !date2) return false;
@@ -141,7 +168,122 @@ const CSVViewer: React.FC = () => {
     }
   };
 
-  // Fonctions de gestion des fichiers et données
+  const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
+    const sortedTasks = [...tasks].sort((a, b) => {
+      if (a.startPercentage === b.startPercentage) {
+        return (b.startPercentage + b.duration) - (a.startPercentage + a.duration);
+      }
+      return a.startPercentage - b.startPercentage;
+    });
+
+    const overlaps = new Map<string, number>();
+    const timeSlots = new Map<string, string>();
+
+    for (let i = 0; i < sortedTasks.length; i++) {
+      const currentTask = sortedTasks[i];
+      const currentId = getOperationId(currentTask.task);
+      const start = currentTask.startPercentage;
+      const end = start + currentTask.duration;
+
+      let level = 0;
+      let foundSlot = false;
+
+      while (!foundSlot) {
+        foundSlot = true;
+        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+          const timeKey = `${level}_${time}`;
+          if (timeSlots.has(timeKey)) {
+            foundSlot = false;
+            level++;
+            break;
+          }
+        }
+      }
+
+      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+        timeSlots.set(`${level}_${time}`, currentId);
+      }
+
+      overlaps.set(currentId, level);
+    }
+
+    return overlaps;
+  };
+
+  // Fonctions de gestion des colonnes visibles
+  const handleColumnVisibilityChange = (columnIndex: number) => {
+    setColumnVisibility(prev => 
+      prev.map(col => 
+        col.index === columnIndex 
+          ? { ...col, visible: !col.visible }
+          : col
+      )
+    );
+  };
+
+  const getVisibleColumns = () => {
+    return columnVisibility
+      .filter(col => col.visible)
+      .map(col => col.index);
+  };
+
+  const resetColumnVisibility = () => {
+    setColumnVisibility(prev => 
+      prev.map((col, index) => ({
+        ...col,
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
+      }))
+    );
+  };
+
+  const filteredData = data.filter(row => {
+    return headers.every((header, index) => {
+      const filterValue = (filters[header] || '').toLowerCase();
+      const cellValue = (row[index] || '').toString().toLowerCase();
+      return !filterValue || cellValue.includes(filterValue);
+    });
+  });
+
+  // Fonction de gestion des filtres
+  const handleFilterChange = (header: string, value: string): void => {
+    setFilters(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  };
+
+  // Fonctions d'édition
+  const handleInputChange = (header: string, value: string): void => {
+    setEditedData(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  };
+
+  const handleEditClick = (row: string[]): void => {
+    const operationId = getOperationId(row);
+    setEditingRow(operationId);
+    const rowData: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      rowData[header] = row[index] || '';
+    });
+    setEditedData(rowData);
+  };
+
+  const handleCancelEdit = (): void => {
+    setEditingRow(null);
+    setEditedData({});
+  };
+
+  const handleSaveEdit = (operationId: string): void => {
+    const updatedRow = headers.map(header => editedData[header] || '');
+    setData(prevData => 
+      prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
+    );
+    setEditingRow(null);
+    setEditedData({});
+  };
+  // Gestion des fichiers CSV
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -234,16 +376,7 @@ const CSVViewer: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  // Fonction pour assigner une date à une tâche
-  const assignDateToTask = (task: string[], targetDate: string): string[] => {
-    const updatedTask = [...task];
-    updatedTask[2] = targetDate;  // Date de début
-    updatedTask[3] = '08:00';     // Heure de début par défaut
-    updatedTask[4] = targetDate;  // Date de fin
-    updatedTask[5] = '09:00';     // Heure de fin par défaut (1 heure plus tard)
-    return updatedTask;
-  };
-  // Fonctions de filtrage et groupement
+  // Fonctions de traitement des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -272,34 +405,12 @@ const CSVViewer: React.FC = () => {
         }
       });
 
-      // Appliquer les ajustements horaires pour les tâches avec dates
-      filteredByDate = filteredByDate.map(row => {
-        const adjustedRow = [...row];
-        
-        if (!row[2] || !row[4]) {
-          return adjustedRow;
-        }
-
-        const startDate = new Date(adjustedRow[2]);
-        const endDate = new Date(adjustedRow[4]);
-        const currentDate = new Date(dateStr);
-
-        if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
-          adjustedRow[3] = '00:00';
-        }
-        if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
-          adjustedRow[5] = '23:59';
-        }
-
-        return adjustedRow;
-      });
-
       return filteredByDate;
     } catch (err) {
       console.error('Erreur lors du filtrage des données:', err);
       return [];
     }
-  }, [data, isSameDay]);
+  }, [data]);
 
   const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
     let groupIndex: number;
@@ -347,80 +458,23 @@ const CSVViewer: React.FC = () => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
 
-  const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
-    const sortedTasks = [...tasks].sort((a, b) => {
-      if (a.startPercentage === b.startPercentage) {
-        return (b.startPercentage + b.duration) - (a.startPercentage + a.duration);
-      }
-      return a.startPercentage - b.startPercentage;
-    });
-
-    const overlaps = new Map<string, number>();
-    const timeSlots = new Map<string, string>();
-
-    for (let i = 0; i < sortedTasks.length; i++) {
-      const currentTask = sortedTasks[i];
-      const currentId = getOperationId(currentTask.task);
-      const start = currentTask.startPercentage;
-      const end = start + currentTask.duration;
-
-      let level = 0;
-      let foundSlot = false;
-
-      while (!foundSlot) {
-        foundSlot = true;
-        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-          const timeKey = `${level}_${time}`;
-          if (timeSlots.has(timeKey)) {
-            foundSlot = false;
-            level++;
-            break;
-          }
+  const handleAddTechnician = (): void => {
+    const trimmedTechnician = newTechnician.trim();
+    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
+      setAllTechnicians(prev => {
+        if (prev.includes(trimmedTechnician)) {
+          return prev;
         }
-      }
-
-      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-        timeSlots.set(`${level}_${time}`, currentId);
-      }
-
-      overlaps.set(currentId, level);
+        const technicians = prev.filter(tech => tech !== "Sans technicien");
+        technicians.push(trimmedTechnician);
+        technicians.sort((a, b) => a.localeCompare(b));
+        if (prev.includes("Sans technicien")) {
+          technicians.push("Sans technicien");
+        }
+        return technicians;
+      });
+      setNewTechnician('');
     }
-
-    return overlaps;
-  };
-
-  const filteredData = data.filter(row => {
-    return headers.every((header, index) => {
-      const filterValue = (filters[header] || '').toLowerCase();
-      const cellValue = (row[index] || '').toString().toLowerCase();
-      return !filterValue || cellValue.includes(filterValue);
-    });
-  });
-
-  // Fonctions de gestion des colonnes visibles
-  const handleColumnVisibilityChange = (columnIndex: number) => {
-    setColumnVisibility(prev => 
-      prev.map(col => 
-        col.index === columnIndex 
-          ? { ...col, visible: !col.visible }
-          : col
-      )
-    );
-  };
-
-  const getVisibleColumns = () => {
-    return columnVisibility
-      .filter(col => col.visible)
-      .map(col => col.index);
-  };
-
-  const resetColumnVisibility = () => {
-    setColumnVisibility(prev => 
-      prev.map((col, index) => ({
-        ...col,
-        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
-      }))
-    );
   };
   // Gestion du drag & drop et interactions
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
@@ -502,11 +556,12 @@ const CSVViewer: React.FC = () => {
       const updatedTask = assignDateToTask(draggedTaskData, selectedDate);
       updatedTask[15] = targetGroup;
 
-      setData(prevData => 
-        prevData.map(row => 
+      setData(prevData => {
+        // On s'assure de ne mettre à jour que la tâche spécifique
+        return prevData.map(row => 
           getOperationId(row) === operationId ? updatedTask : row
-        )
-      );
+        );
+      });
     } else {
       const selectedDateObj = new Date(selectedDate);
       const startDateObj = new Date(startDate);
@@ -524,6 +579,7 @@ const CSVViewer: React.FC = () => {
         return;
       }
 
+      // Mise à jour de l'assignation sans dupliquer la tâche
       updateAssignment(operationId, targetGroup);
     }
 
@@ -531,50 +587,31 @@ const CSVViewer: React.FC = () => {
     setDraggedTask(null);
   }, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
 
-  // Gestion des autres interactions
   const handleTaskClick = (operationId: string) => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
 
-  const handleFilterChange = (header: string, value: string): void => {
-    setFilters(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
+  // Messages de feedback pour le drag & drop
+  const getDragMessage = (): React.ReactNode => {
+    if (!draggedTask) return null;
 
-  const handleAddTechnician = (): void => {
-    const trimmedTechnician = newTechnician.trim();
-    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
-      setAllTechnicians(prev => {
-        if (prev.includes(trimmedTechnician)) {
-          return prev;
-        }
-        const technicians = prev.filter(tech => tech !== "Sans technicien");
-        technicians.push(trimmedTechnician);
-        technicians.sort((a, b) => a.localeCompare(b));
-        if (prev.includes("Sans technicien")) {
-          technicians.push("Sans technicien");
-        }
-        return technicians;
-      });
-      setNewTechnician('');
-    }
-  };
+    const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
 
-  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
-    setData(prevData => {
-      return prevData.map(row => {
-        if (getOperationId(row) === operationId) {
-          const newRow = [...row];
-          newRow[15] = newTechnician;
-          return newRow;
-        }
-        return row;
-      });
-    });
-  }, []);
-  // Composants d'interface de base
+    return (
+      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+        {isUnassigned ? (
+          "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
+        ) : draggedTask.task[2] !== selectedDate ? (
+          <span className="text-red-600">
+            Impossible de déplacer une tâche en dehors de sa période ({draggedTask.task[2]})
+          </span>
+        ) : (
+          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
+        )}
+      </div>
+    );
+  };
+  // Composants de rendu de base
   const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
     const isEditing = editingRow === operationId;
@@ -668,7 +705,6 @@ const CSVViewer: React.FC = () => {
   const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
     if (!task) return null;
     
-    // Pour les tâches non affectées, afficher un style spécial
     const isUnassigned = !task[2] || !task[4];
     
     if (groupBy === 'Technicien') {
@@ -690,23 +726,6 @@ const CSVViewer: React.FC = () => {
       );
     }
     return task[labelIndex] || 'N/A';
-  };
-
-  const renderFilterReset = (): React.ReactNode => {
-    if (!selectedTask) return null;
-
-    return (
-      <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={() => setSelectedTask(null)}
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
-                   transition-colors duration-200 flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Réinitialiser le filtre
-        </button>
-      </div>
-    );
   };
 
   const renderDateSelector = (): React.ReactNode => (
@@ -744,30 +763,81 @@ const CSVViewer: React.FC = () => {
     </div>
   );
 
-  const getDragMessage = (): React.ReactNode => {
-    if (!draggedTask) return null;
-
-    const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
+  const renderFilterReset = (): React.ReactNode => {
+    if (!selectedTask) return null;
 
     return (
-      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-        {isUnassigned ? (
-          "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
-        ) : draggedTask.task[2] !== selectedDate ? (
-          <span className="text-red-600">
-            Impossible de déplacer une tâche en dehors de sa période ({draggedTask.task[2]})
-          </span>
-        ) : (
-          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
-        )}
+      <div className="flex items-center justify-end mb-4">
+        <button
+          onClick={() => setSelectedTask(null)}
+          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
+                   transition-colors duration-200 flex items-center gap-2"
+        >
+          <X className="h-4 w-4" />
+          Réinitialiser le filtre
+        </button>
       </div>
     );
   };
-  // Composants d'interface de base
- 
+  // Configuration des onglets et rendu principal
+  const renderTabButtons = (): React.ReactNode => (
+    <div className="flex flex-wrap gap-2">
+      {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
+        <button
+          key={index}
+          onClick={() => setActiveTab(index)}
+          className={`
+            px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
+            ${activeTab === index 
+              ? 'bg-blue-500 text-white shadow-md scale-105' 
+              : 'bg-white hover:bg-gray-100'
+            }
+          `}
+        >
+          {title === 'Paramètres' && <Settings className="h-4 w-4" />}
+          {title}
+        </button>
+      ))}
+    </div>
+  );
 
-  
-  // Rendu du tableau
+  const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        {renderDateSelector()}
+        {showTechnicianInput && renderTechnicianInput()}
+      </div>
+
+      <div className="space-y-6">
+        <div className="relative bg-white rounded-lg shadow-sm">
+          {renderGanttChart(groupBy)}
+        </div>
+        
+        {draggedTask && getDragMessage()}
+        
+        <div className="text-sm text-gray-500 italic space-y-1">
+          {showTechnicianInput && (
+            <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
+          )}
+          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
+          <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
+        </div>
+
+        {selectedDate && (
+          <div className="mt-8 border-t-2 border-gray-200 pt-8">
+            {renderFilterReset()}
+            <h3 className="text-lg font-semibold mb-4">
+              {selectedTask 
+                ? "Détails de l'opération sélectionnée"
+                : `Détails des opérations pour le ${selectedDate}`}
+            </h3>
+            {renderTable(filterDataForDate(selectedDate, selectedTask))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   const renderTableHeader = (): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
@@ -897,220 +967,7 @@ const CSVViewer: React.FC = () => {
     );
   };
 
-  // Rendu du Gantt Chart
-  const renderGanttChart = (groupBy: string): React.ReactNode => {
-    if (!selectedDate) {
-      return <p>Veuillez sélectionner une date</p>;
-    }
-
-    const BASE_ROW_HEIGHT = 60;
-    const HEADER_HEIGHT = 40;
-    const TASK_HEIGHT = 20;
-    const TASK_MARGIN = 4;
-    const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
-
-    const filteredDataForDate = filterDataForDate(selectedDate);
-    const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = groupDataByType(groupBy, filteredDataForDate) || {};
-
-    if (!groups.length && !unassignedTasks.length) {
-      return <p>Aucune donnée à afficher pour cette date</p>;
-    }
-
-    const groupedData: GanttChartData[] = groups.map(group => {
-      let tasks: TaskData[];
-      
-      if (group === "Non affectées") {
-        // Pour les tâches non affectées
-        tasks = unassignedTasks.map(task => ({
-          task,
-          startPercentage: 33.33, // 8h du matin en pourcentage
-          duration: 4.17,         // 1 heure en pourcentage
-          operationId: getOperationId(task),
-          isMultiDay: false,
-          isStart: true,
-          isEnd: true,
-          isUnassigned: true
-        }));
-      } else {
-        // Pour les tâches normales
-        tasks = filteredDataForDate
-          .filter(row => row && row[groupIndex] === group)
-          .map(task => {
-            const hasStartAndEnd = Boolean(task[2] && task[4]);
-            const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
-            const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
-            const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
-
-            return {
-              task,
-              startPercentage: getTimePercentage(task[3]),
-              duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
-              operationId: getOperationId(task),
-              isMultiDay,
-              isStart,
-              isEnd,
-              isUnassigned: false
-            };
-          });
-      }
-
-      const overlaps = detectOverlaps(tasks);
-      const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
-      const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
-
-      return {
-        group,
-        tasks,
-        overlaps,
-        rowHeight,
-        isUnassignedGroup: group === "Non affectées"
-      };
-    });
-
-    return (
-      <div style={{ overflowX: 'auto', width: '100%' }}>
-        <div style={{ display: 'flex', minWidth: '1000px' }}>
-          {/* Colonne des groupes */}
-          <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
-            <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
-                 className="flex items-center font-bold">
-              {groupBy}
-            </div>
-            {groupedData.map(({ group, rowHeight, isUnassignedGroup }, index) => (
-              <div 
-                key={group} 
-                style={{ height: `${rowHeight}px` }}
-                className={`
-                  flex items-center px-2.5 border-b border-gray-200
-                  ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                  ${group === 'Sans technicien' ? 'text-red-500' : ''}
-                `}
-              >
-                {group || 'N/A'}
-              </div>
-            ))}
-          </div>
-
-          {/* Zone de contenu */}
-          <div style={{ flex: 1, position: 'relative' }}>
-            {renderTimeHeader({ HEADER_HEIGHT })}
-            {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
-              <div 
-                key={group}
-                style={{ height: `${rowHeight}px` }}
-                className={`
-                  relative border-b border-gray-200
-                  ${dropZoneActive === group ? 'bg-blue-50' : 
-                    isUnassignedGroup ? 'bg-yellow-50' : 
-                    index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                `}
-                onDragOver={handleDragOver}
-                onDragEnter={(e) => handleDragEnter(e, group)}
-                onDragLeave={(e) => handleDragLeave(e, group)}
-                onDrop={(e) => handleDrop(group, e)}
-              >
-                {tasks.map((taskData) => {
-                  const verticalPosition = overlaps.get(taskData.operationId) || 0;
-                  return (
-                    <div
-                      key={`${taskData.operationId}_${selectedDate}`}
-                      draggable={true}
-                      onDragStart={(e) => handleDragStart(e, taskData)}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => handleTaskClick(taskData.operationId)}
-                      style={{
-                        position: 'absolute',
-                        left: `${taskData.startPercentage}%`,
-                        width: `${taskData.duration}%`,
-                        height: `${TASK_HEIGHT}px`,
-                        top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                        backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
-                        borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                        borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                        cursor: 'pointer',
-                        outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
-                        boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
-                      }}
-                      className={`
-                        rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
-                        hover:brightness-90 transition-all duration-200
-                        ${taskData.isUnassigned ? 'text-black' : ''}
-                      `}
-                    >
-                      {renderGanttTaskContent({
-                        task: taskData.task,
-                        groupBy,
-                        labelIndex
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-  // Configuration des onglets et rendu final
-  const renderTabButtons = (): React.ReactNode => (
-    <div className="flex flex-wrap gap-2">
-      {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
-        <button
-          key={index}
-          onClick={() => setActiveTab(index)}
-          className={`
-            px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
-            ${activeTab === index 
-              ? 'bg-blue-500 text-white shadow-md scale-105' 
-              : 'bg-white hover:bg-gray-100'
-            }
-          `}
-        >
-          {title === 'Paramètres' && <Settings className="h-4 w-4" />}
-          {title}
-        </button>
-      ))}
-    </div>
-  );
-
-  const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        {renderDateSelector()}
-        {showTechnicianInput && renderTechnicianInput()}
-      </div>
-
-      <div className="space-y-6">
-        <div className="relative bg-white rounded-lg shadow-sm">
-          {renderGanttChart(groupBy)}
-        </div>
-        
-        {draggedTask && getDragMessage()}
-        
-        <div className="text-sm text-gray-500 italic space-y-1">
-          {showTechnicianInput && (
-            <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
-          )}
-          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
-          <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
-        </div>
-
-        {selectedDate && (
-          <div className="mt-8 border-t-2 border-gray-200 pt-8">
-            {renderFilterReset()}
-            <h3 className="text-lg font-semibold mb-4">
-              {selectedTask 
-                ? "Détails de l'opération sélectionnée"
-                : `Détails des opérations pour le ${selectedDate}`}
-            </h3>
-            {renderTable(filterDataForDate(selectedDate, selectedTask))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
+  // Configuration des onglets
   const tabContent = [
     { 
       title: 'Tableau', 
@@ -1133,38 +990,6 @@ const CSVViewer: React.FC = () => {
       content: renderSettings()
     }
   ];
-
-  // Fonctions d'édition manquantes
-  const handleEditClick = (row: string[]): void => {
-    const operationId = getOperationId(row);
-    setEditingRow(operationId);
-    const rowData: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      rowData[header] = row[index] || '';
-    });
-    setEditedData(rowData);
-  };
-
-  const handleCancelEdit = (): void => {
-    setEditingRow(null);
-    setEditedData({});
-  };
-
-  const handleSaveEdit = (operationId: string): void => {
-    const updatedRow = headers.map(header => editedData[header] || '');
-    setData(prevData => 
-      prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
-    );
-    setEditingRow(null);
-    setEditedData({});
-  };
-
-  const handleInputChange = (header: string, value: string): void => {
-    setEditedData(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
 
   // Rendu principal du composant
   return (
