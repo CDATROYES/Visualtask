@@ -27,7 +27,6 @@ interface DraggedTaskData {
   originalTechnician: string;
   startPercentage: number;
   duration: number;
-  hasDefinedHours: boolean;
 }
 
 interface TaskData {
@@ -39,7 +38,6 @@ interface TaskData {
   isStart: boolean;
   isEnd: boolean;
   isUnassigned?: boolean;
-  hasDefinedHours?: boolean;
 }
 
 interface GanttChartData {
@@ -70,44 +68,6 @@ interface RenderProps {
   groupBy: string;
   labelIndex: number;
 }
-
-interface TabItem {
-  title: string;
-  content: React.ReactNode;
-}
-
-// Constantes
-const GANTT_CONSTANTS = {
-  BASE_ROW_HEIGHT: 60,
-  HEADER_HEIGHT: 40,
-  TASK_HEIGHT: 20,
-  TASK_MARGIN: 4,
-  DEFAULT_START_HOUR: 8,
-  DEFAULT_DURATION: 1,
-  DEFAULT_START_PERCENTAGE: 33.33, // 8:00 en pourcentage
-  DEFAULT_DURATION_PERCENTAGE: 4.17, // 1 heure en pourcentage
-} as const;
-
-// Types pour les index des colonnes
-const enum ColumnIndex {
-  Vehicule = 0,
-  Operation = 1,
-  StartDate = 2,
-  StartTime = 3,
-  EndDate = 4,
-  EndTime = 5,
-  Location = 10,
-  Technician = 15
-}
-
-// Types pour les vues
-const enum ViewType {
-  Table = 'Tableau',
-  Vehicle = 'Véhicule',
-  Location = 'Lieu',
-  Technician = 'Technicien',
-  Settings = 'Paramètres'
-}
 const CSVViewer: React.FC = () => {
   // États du composant
   const [data, setData] = useState<string[][]>([]);
@@ -126,20 +86,6 @@ const CSVViewer: React.FC = () => {
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
 
-  // Configuration des colonnes visibles par défaut
-  const DEFAULT_VISIBLE_COLUMNS = [
-    ColumnIndex.Vehicule,
-    ColumnIndex.Operation,
-    ColumnIndex.StartDate,
-    ColumnIndex.StartTime,
-    ColumnIndex.EndDate,
-    ColumnIndex.EndTime,
-    ColumnIndex.Location,
-    ColumnIndex.Location + 1, // Index 11
-    ColumnIndex.Technician,
-    ColumnIndex.Technician + 1, // Index 16
-  ];
-
   // Effets
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -156,56 +102,46 @@ const CSVViewer: React.FC = () => {
     if (headers.length > 0 && columnVisibility.length === 0) {
       const initialVisibility = headers.map((header, index) => ({
         index,
-        visible: DEFAULT_VISIBLE_COLUMNS.includes(index),
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index),
         name: header
       }));
       setColumnVisibility(initialVisibility);
     }
   }, [headers]);
 
-  // Configuration des onglets
-  const tabs: TabItem[] = [
-    { 
-      title: ViewType.Table, 
-      content: null // Sera défini plus tard avec renderTable
-    },
-    {
-      title: ViewType.Vehicle,
-      content: null // Sera défini plus tard avec renderGanttView
-    },
-    {
-      title: ViewType.Location,
-      content: null // Sera défini plus tard avec renderGanttView
-    },
-    {
-      title: ViewType.Technician,
-      content: null // Sera défini plus tard avec renderGanttView
-    },
-    {
-      title: ViewType.Settings,
-      content: null // Sera défini plus tard avec renderSettings
+  // Fonctions utilitaires de base
+  const isSameDay = (date1: string, date2: string): boolean => {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+  };
+
+  const getOperationId = (task: string[]): string => {
+    return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
+  };
+
+  const getUniqueColor = (index: number): string => {
+    const hue = (index * 137.508) % 360;
+    return `hsl(${hue}, 70%, 50%)`;
+  };
+
+  const getTimePercentage = (time: string): number => {
+    if (!time) return 33.33; // 8:00 par défaut
+    try {
+      const [hours, minutes] = time.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes)) return 33.33;
+      return ((hours * 60 + minutes) / (24 * 60)) * 100;
+    } catch (err) {
+      console.error('Erreur lors du calcul du pourcentage de temps:', err);
+      return 33.33;
     }
-  ];
+  };
 
-  // Fonctions utilitaires de manipulation d'état
-  const updateData = useCallback((updater: (prevData: string[][]) => string[][]) => {
-    setData(prevData => {
-      const newData = updater(prevData);
-      return newData;
-    });
-  }, []);
-
-  const resetEditing = useCallback(() => {
-    setEditingRow(null);
-    setEditedData({});
-  }, []);
-
-  const resetDragDrop = useCallback(() => {
-    setDraggedTask(null);
-    setDropZoneActive(null);
-  }, []);
-
-  const updateColumnVisibility = useCallback((columnIndex: number) => {
+  // Fonctions de gestion des colonnes visibles
+  const handleColumnVisibilityChange = (columnIndex: number) => {
     setColumnVisibility(prev => 
       prev.map(col => 
         col.index === columnIndex 
@@ -213,85 +149,135 @@ const CSVViewer: React.FC = () => {
           : col
       )
     );
-  }, []);
+  };
 
-  const resetColumnVisibility = useCallback(() => {
-    setColumnVisibility(prev => 
-      prev.map((col, index) => ({
-        ...col,
-        visible: DEFAULT_VISIBLE_COLUMNS.includes(index)
-      }))
-    );
-  }, []);
-
-  const getVisibleColumns = useCallback(() => {
+  const getVisibleColumns = () => {
     return columnVisibility
       .filter(col => col.visible)
       .map(col => col.index);
-  }, [columnVisibility]);
-  // Fonctions utilitaires de base
-const isSameDay = (date1: string, date2: string): boolean => {
-  if (!date1 || !date2) return false;
-  const d1 = new Date(date1);
-  const d2 = new Date(date2);
-  return d1.getFullYear() === d2.getFullYear() &&
-          d1.getMonth() === d2.getMonth() &&
-          d1.getDate() === d2.getDate();
+  };
+
+  const resetColumnVisibility = () => {
+    setColumnVisibility(prev => 
+      prev.map((col, index) => ({
+        ...col,
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
+      }))
+    );
+  };
+
+  // Fonction de gestion du clic sur une tâche
+  const handleTaskClick = (operationId: string) => {
+    setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
+  };
+
+  // Fonction pour assigner une date à une tâche
+  const assignDateToTask = (task: string[], targetDate: string): string[] => {
+    const updatedTask = [...task];
+    updatedTask[2] = targetDate;  // Date de début
+    updatedTask[3] = '08:00';     // Heure de début par défaut
+    updatedTask[4] = targetDate;  // Date de fin
+    updatedTask[5] = '09:00';     // Heure de fin par défaut (1 heure plus tard)
+    return updatedTask;
+  };
+  // Gestion des fichiers et données
+const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  parse(file, {
+    complete: (results: CSVResult) => {
+      const processedData = results.data.slice(1)
+        .filter((row: string[]) => row.some(cell => cell))
+        .map((row: string[]) => {
+          const updatedRow = [...row];
+          updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
+
+          if (updatedRow[2] && updatedRow[4]) {
+            const startDate = new Date(updatedRow[2]);
+            const endDate = new Date(updatedRow[4]);
+            updatedRow[2] = startDate.toISOString().split('T')[0];
+            updatedRow[4] = endDate.toISOString().split('T')[0];
+          }
+          return updatedRow;
+        });
+
+      setData(processedData);
+      setHeaders(results.data[0]);
+
+      // Utilisation de Set pour les dates et techniciens uniques
+      const allDatesSet = new Set<string>();
+      const technicianSet = new Set<string>();
+
+      processedData.forEach((row: string[]) => {
+        if (row[2] && row[4]) {
+          const startDate = new Date(row[2]);
+          const endDate = new Date(row[4]);
+
+          for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+            allDatesSet.add(date.toISOString().split('T')[0]);
+          }
+        }
+        if (row[15]) {
+          technicianSet.add(row[15].trim());
+        }
+      });
+
+      // Conversion des Sets en Arrays avec Array.from()
+      const sortedDates = Array.from(allDatesSet)
+        .filter(date => date)
+        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+      const sortedTechnicians = Array.from(technicianSet)
+        .filter(tech => tech && tech !== "Sans technicien")
+        .sort((a, b) => a.localeCompare(b));
+
+      if (technicianSet.has("Sans technicien")) {
+        sortedTechnicians.push("Sans technicien");
+      }
+
+      setUniqueDates(sortedDates);
+      setAllTechnicians(sortedTechnicians);
+
+      const initialFilters: Record<string, string> = {};
+      results.data[0].forEach(header => {
+        initialFilters[header] = '';
+      });
+      setFilters(initialFilters);
+    },
+    error: (error: Error) => {
+      console.error('Erreur lors de la lecture du fichier:', error);
+    }
+  });
 };
 
-const getOperationId = (task: string[]): string => {
-  return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
+const downloadCSV = (content: string, fileName: string): void => {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 };
 
-const getUniqueColor = (index: number): string => {
-  const hue = (index * 137.508) % 360;
-  return `hsl(${hue}, 70%, 50%)`;
+const handleExportCSV = (): void => {
+  const dataToExport = isFiltering ? filteredData : data;
+  const csv = unparse({
+    fields: headers,
+    data: dataToExport
+  });
+  const fileName = `export_${new Date().toISOString().split('T')[0]}.csv`;
+  downloadCSV(csv, fileName);
 };
 
-const getTimePercentage = (time: string): number => {
-  if (!time) return GANTT_CONSTANTS.DEFAULT_START_PERCENTAGE;
-  try {
-    const [hours, minutes] = time.split(':').map(Number);
-    if (isNaN(hours) || isNaN(minutes)) return GANTT_CONSTANTS.DEFAULT_START_PERCENTAGE;
-    return ((hours * 60 + minutes) / (24 * 60)) * 100;
-  } catch (err) {
-    console.error('Erreur lors du calcul du pourcentage de temps:', err);
-    return GANTT_CONSTANTS.DEFAULT_START_PERCENTAGE;
-  }
-};
-
-const hasDefinedHours = (task: string[]): boolean => {
-  return Boolean(task[ColumnIndex.StartTime] && task[ColumnIndex.EndTime]);
-};
-
-// Fonction pour assigner une date à une tâche
-const assignDateToTask = (task: string[], targetDate: string): string[] => {
-  const updatedTask = [...task];
-  updatedTask[ColumnIndex.StartDate] = targetDate;
-  updatedTask[ColumnIndex.EndDate] = targetDate;
-
-  // Conserver les heures existantes si elles sont présentes
-  if (!updatedTask[ColumnIndex.StartTime] || !updatedTask[ColumnIndex.EndTime]) {
-    updatedTask[ColumnIndex.StartTime] = `${GANTT_CONSTANTS.DEFAULT_START_HOUR.toString().padStart(2, '0')}:00`;
-    updatedTask[ColumnIndex.EndTime] = `${(GANTT_CONSTANTS.DEFAULT_START_HOUR + GANTT_CONSTANTS.DEFAULT_DURATION)
-      .toString().padStart(2, '0')}:00`;
-  }
-
-  return updatedTask;
-};
-
-// Gestionnaires d'événements de base
-const handleDateSelection = (e: React.ChangeEvent<HTMLSelectElement>): void => {
-  setSelectedDate(e.target.value);
-  setSelectedTask(null); // Réinitialiser la tâche sélectionnée lors du changement de date
-};
-
-const handleTaskClick = (operationId: string) => {
-  setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
-};
-
-const handleTechnicianInput = (e: React.ChangeEvent<HTMLInputElement>): void => {
-  setNewTechnician(e.target.value);
+const handleFilterChange = (header: string, value: string): void => {
+  setFilters(prev => ({
+    ...prev,
+    [header]: value
+  }));
 };
 
 const handleAddTechnician = (): void => {
@@ -313,12 +299,156 @@ const handleAddTechnician = (): void => {
   }
 };
 
-const handleFilterChange = (header: string, value: string): void => {
-  setFilters(prev => ({
+const filteredData = data.filter(row => {
+  return headers.every((header, index) => {
+    const filterValue = (filters[header] || '').toLowerCase();
+    const cellValue = (row[index] || '').toString().toLowerCase();
+    return !filterValue || cellValue.includes(filterValue);
+  });
+});
+
+const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
+  if (!dateStr || !data.length) return [];
+
+  try {
+    const dateObj = new Date(dateStr);
+    dateObj.setHours(0, 0, 0, 0);
+
+    // Inclure les tâches non affectées si aucun operationId n'est spécifié
+    let filteredByDate = data.filter((row: string[]) => {
+      // Si la tâche n'a pas de date, elle est toujours incluse
+      if (!row[2] || !row[4]) return operationId ? getOperationId(row) === operationId : true;
+
+      try {
+        const startDate = new Date(row[2]);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(row[4]);
+        endDate.setHours(23, 59, 59, 999);
+        return startDate <= dateObj && dateObj <= endDate;
+      } catch (err) {
+        console.error('Erreur lors du filtrage des dates:', err);
+        return false;
+      }
+    });
+
+    // Appliquer les ajustements horaires pour les tâches avec dates
+    filteredByDate = filteredByDate.map(row => {
+      const adjustedRow = [...row];
+      
+      if (!row[2] || !row[4]) {
+        return adjustedRow;
+      }
+
+      const startDate = new Date(adjustedRow[2]);
+      const endDate = new Date(adjustedRow[4]);
+      const currentDate = new Date(dateStr);
+
+      if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
+        adjustedRow[3] = '00:00';
+      }
+      if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
+        adjustedRow[5] = '23:59';
+      }
+
+      return adjustedRow;
+    });
+
+    // Filtrer par operationId si spécifié
+    if (operationId) {
+      return filteredByDate.filter(row => getOperationId(row) === operationId);
+    }
+
+    return filteredByDate;
+  } catch (err) {
+    console.error('Erreur lors du filtrage des données:', err);
+    return [];
+  }
+}, [data, isSameDay]);
+// Gestion de l'édition
+const handleEditClick = (row: string[]): void => {
+  const operationId = getOperationId(row);
+  setEditingRow(operationId);
+  const rowData: Record<string, string> = {};
+  headers.forEach((header, index) => {
+    rowData[header] = row[index] || '';
+  });
+  setEditedData(rowData);
+};
+
+const handleCancelEdit = (): void => {
+  setEditingRow(null);
+  setEditedData({});
+};
+
+const handleSaveEdit = (operationId: string): void => {
+  const updatedRow = headers.map(header => editedData[header] || '');
+  setData(prevData => 
+    prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
+  );
+  setEditingRow(null);
+  setEditedData({});
+};
+
+const handleInputChange = (header: string, value: string): void => {
+  setEditedData(prev => ({
     ...prev,
     [header]: value
   }));
 };
+
+// Groupement des données
+const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
+  let groupIndex: number;
+  let labelIndex: number;
+  let groups: string[] = [];
+  
+  // Séparer les tâches non affectées
+  const unassignedTasks = data.filter(row => !row[2] || !row[4]);
+
+  switch (groupBy) {
+    case 'Véhicule':
+      groupIndex = 0;
+      labelIndex = 1;
+      groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+        .filter(Boolean)
+        .sort();
+      break;
+    case 'Lieu':
+      groupIndex = 10;
+      labelIndex = 1;
+      groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+        .filter(Boolean)
+        .sort();
+      break;
+    case 'Technicien':
+      groupIndex = 15;
+      labelIndex = 15;
+      groups = allTechnicians;
+      break;
+    default:
+      return { groups: [], groupIndex: 0, labelIndex: 0, unassignedTasks: [] };
+  }
+
+  // Ajouter le groupe "Non affectées" s'il y a des tâches non affectées
+  if (unassignedTasks.length > 0) {
+    groups.push("Non affectées");
+  }
+
+  return { groups, groupIndex, labelIndex, unassignedTasks };
+}, [allTechnicians, data]);
+
+const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+  setData(prevData => {
+    return prevData.map(row => {
+      if (getOperationId(row) === operationId) {
+        const newRow = [...row];
+        newRow[15] = newTechnician;
+        return newRow;
+      }
+      return row;
+    });
+  });
+}, []);
 
 const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
   const sortedTasks = [...tasks].sort((a, b) => {
@@ -362,242 +492,6 @@ const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
   return overlaps;
 };
 
-// Filtrage des données
-const filteredData = useCallback(() => {
-  return data.filter(row => {
-    return headers.every((header, index) => {
-      const filterValue = (filters[header] || '').toLowerCase();
-      const cellValue = (row[index] || '').toString().toLowerCase();
-      return !filterValue || cellValue.includes(filterValue);
-    });
-  });
-}, [data, headers, filters]);
-// Gestion des fichiers et données
-const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-
-  parse(file, {
-    complete: (results: CSVResult) => {
-      const processedData = results.data.slice(1)
-        .filter((row: string[]) => row.some(cell => cell))
-        .map((row: string[]) => {
-          const updatedRow = [...row];
-          updatedRow[ColumnIndex.Technician] = updatedRow[ColumnIndex.Technician]?.trim() || "Sans technicien";
-
-          // Formatage des dates
-          if (updatedRow[ColumnIndex.StartDate] && updatedRow[ColumnIndex.EndDate]) {
-            const startDate = new Date(updatedRow[ColumnIndex.StartDate]);
-            const endDate = new Date(updatedRow[ColumnIndex.EndDate]);
-            updatedRow[ColumnIndex.StartDate] = startDate.toISOString().split('T')[0];
-            updatedRow[ColumnIndex.EndDate] = endDate.toISOString().split('T')[0];
-          }
-          return updatedRow;
-        });
-
-      setData(processedData);
-      setHeaders(results.data[0]);
-
-      // Extraction des dates et techniciens uniques
-      const { dates, technicians } = extractUniqueData(processedData);
-      setUniqueDates(dates);
-      setAllTechnicians(technicians);
-
-      // Initialisation des filtres
-      const initialFilters: Record<string, string> = {};
-      results.data[0].forEach(header => {
-        initialFilters[header] = '';
-      });
-      setFilters(initialFilters);
-    },
-    error: (error: Error) => {
-      console.error('Erreur lors de la lecture du fichier:', error);
-    }
-  });
-};
-
-const extractUniqueData = (processedData: string[][]) => {
-  const allDatesSet = new Set<string>();
-  const technicianSet = new Set<string>();
-
-  processedData.forEach((row: string[]) => {
-    if (row[ColumnIndex.StartDate] && row[ColumnIndex.EndDate]) {
-      const startDate = new Date(row[ColumnIndex.StartDate]);
-      const endDate = new Date(row[ColumnIndex.EndDate]);
-
-      for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-        allDatesSet.add(date.toISOString().split('T')[0]);
-      }
-    }
-    if (row[ColumnIndex.Technician]) {
-      technicianSet.add(row[ColumnIndex.Technician].trim());
-    }
-  });
-
-  // Tri des dates et techniciens
-  const dates = Array.from(allDatesSet)
-    .filter(date => date)
-    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-
-  const technicians = Array.from(technicianSet)
-    .filter(tech => tech && tech !== "Sans technicien")
-    .sort((a, b) => a.localeCompare(b));
-
-  if (technicianSet.has("Sans technicien")) {
-    technicians.push("Sans technicien");
-  }
-
-  return { dates, technicians };
-};
-
-const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
-  if (!dateStr || !data.length) return [];
-
-  try {
-    const dateObj = new Date(dateStr);
-    dateObj.setHours(0, 0, 0, 0);
-
-    // Filtrage initial des données
-    let filteredByDate = data.filter((row: string[]) => {
-      // Inclusion des tâches non affectées
-      if (!row[ColumnIndex.StartDate] || !row[ColumnIndex.EndDate]) {
-        return operationId ? getOperationId(row) === operationId : true;
-      }
-
-      try {
-        const startDate = new Date(row[ColumnIndex.StartDate]);
-        startDate.setHours(0, 0, 0, 0);
-        const endDate = new Date(row[ColumnIndex.EndDate]);
-        endDate.setHours(23, 59, 59, 999);
-        return startDate <= dateObj && dateObj <= endDate;
-      } catch (err) {
-        console.error('Erreur lors du filtrage des dates:', err);
-        return false;
-      }
-    });
-
-    // Ajustement des heures pour les tâches multi-jours
-    filteredByDate = filteredByDate.map(row => {
-      const adjustedRow = [...row];
-      
-      if (!row[ColumnIndex.StartDate] || !row[ColumnIndex.EndDate]) {
-        return adjustedRow;
-      }
-
-      const startDate = new Date(adjustedRow[ColumnIndex.StartDate]);
-      const endDate = new Date(adjustedRow[ColumnIndex.EndDate]);
-      const currentDate = new Date(dateStr);
-
-      if (startDate < currentDate && !isSameDay(startDate.toISOString(), currentDate.toISOString())) {
-        adjustedRow[ColumnIndex.StartTime] = '00:00';
-      }
-      if (endDate > currentDate && !isSameDay(endDate.toISOString(), currentDate.toISOString())) {
-        adjustedRow[ColumnIndex.EndTime] = '23:59';
-      }
-
-      return adjustedRow;
-    });
-
-    // Filtrage par operationId si spécifié
-    if (operationId) {
-      return filteredByDate.filter(row => getOperationId(row) === operationId);
-    }
-
-    return filteredByDate;
-  } catch (err) {
-    console.error('Erreur lors du filtrage des données:', err);
-    return [];
-  }
-}, [data, isSameDay]);
-
-const handleExportCSV = (): void => {
-  const dataToExport = isFiltering ? filteredData() : data;
-  const csv = unparse({
-    fields: headers,
-    data: dataToExport
-  });
-  const fileName = `export_${new Date().toISOString().split('T')[0]}.csv`;
-  
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
-};
-
-const groupDataByType = useCallback((groupBy: ViewType, filteredDataForDate: string[][]): GroupData => {
-  let groupIndex: number;
-  let labelIndex: number;
-  let groups: string[] = [];
-  
-  // Séparer les tâches non affectées
-  const unassignedTasks = data.filter(row => !row[ColumnIndex.StartDate] || !row[ColumnIndex.EndDate]);
-
-  switch (groupBy) {
-    case ViewType.Vehicle:
-      groupIndex = ColumnIndex.Vehicule;
-      labelIndex = ColumnIndex.Operation;
-      groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
-        .filter(Boolean)
-        .sort();
-      break;
-    case ViewType.Location:
-      groupIndex = ColumnIndex.Location;
-      labelIndex = ColumnIndex.Operation;
-      groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
-        .filter(Boolean)
-        .sort();
-      break;
-    case ViewType.Technician:
-      groupIndex = ColumnIndex.Technician;
-      labelIndex = ColumnIndex.Technician;
-      groups = allTechnicians;
-      break;
-    default:
-      return { groups: [], groupIndex: 0, labelIndex: 0, unassignedTasks: [] };
-  }
-
-  // Ajouter le groupe "Non affectées" s'il y a des tâches non affectées
-  if (unassignedTasks.length > 0) {
-    groups.push("Non affectées");
-  }
-
-  return { groups, groupIndex, labelIndex, unassignedTasks };
-}, [allTechnicians, data]);
-// Gestion de l'édition
-const handleEditClick = (row: string[]): void => {
-  const operationId = getOperationId(row);
-  setEditingRow(operationId);
-  const rowData: Record<string, string> = {};
-  headers.forEach((header, index) => {
-    rowData[header] = row[index] || '';
-  });
-  setEditedData(rowData);
-};
-
-const handleCancelEdit = (): void => {
-  resetEditing();
-};
-
-const handleSaveEdit = (operationId: string): void => {
-  const updatedRow = headers.map(header => editedData[header] || '');
-  updateData(prevData => 
-    prevData.map(row => getOperationId(row) === operationId ? updatedRow : row)
-  );
-  resetEditing();
-};
-
-const handleInputChange = (header: string, value: string): void => {
-  setEditedData(prev => ({
-    ...prev,
-    [header]: value
-  }));
-};
-
 // Gestion du drag & drop
 const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
   e.stopPropagation();
@@ -605,17 +499,15 @@ const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): vo
     ...task,
     date: selectedDate,
     operationId: getOperationId(task.task),
-    startDate: task.task[ColumnIndex.StartDate] || null,
-    endDate: task.task[ColumnIndex.EndDate] || null,
-    originalTechnician: task.task[ColumnIndex.Technician],
+    startDate: task.task[2] || null,
+    endDate: task.task[4] || null,
+    originalTechnician: task.task[15],
     startPercentage: task.startPercentage,
-    duration: task.duration,
-    hasDefinedHours: hasDefinedHours(task.task)
+    duration: task.duration
   };
 
   setDraggedTask(taskData);
 
-  // Création de l'élément fantôme pour le drag
   const ghostElement = document.createElement('div');
   ghostElement.style.width = '100px';
   ghostElement.style.height = '30px';
@@ -637,36 +529,24 @@ const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void =>
   e.dataTransfer.dropEffect = 'move';
 }, []);
 
-const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>, targetGroup: string): void => {
+const handleDragEnter = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
   e.preventDefault();
   e.stopPropagation();
-  setDropZoneActive(targetGroup);
+  setDropZoneActive(technicianId);
 }, []);
 
-const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>, targetGroup: string): void => {
+const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>, technicianId: string): void => {
   e.preventDefault();
   e.stopPropagation();
-  if (dropZoneActive === targetGroup) {
+  if (dropZoneActive === technicianId) {
     setDropZoneActive(null);
   }
 }, [dropZoneActive]);
 
 const handleDragEnd = useCallback((): void => {
-  resetDragDrop();
-}, [resetDragDrop]);
-
-const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
-  updateData(prevData => 
-    prevData.map(row => {
-      if (getOperationId(row) === operationId) {
-        const newRow = [...row];
-        newRow[ColumnIndex.Technician] = newTechnician;
-        return newRow;
-      }
-      return row;
-    })
-  );
-}, [updateData]);
+  setDraggedTask(null);
+  setDropZoneActive(null);
+}, []);
 
 const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
   e.preventDefault();
@@ -684,10 +564,10 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
     const updatedTask = assignDateToTask(draggedTaskData, selectedDate);
     
     if (targetGroup !== "Non affectées") {
-      updatedTask[ColumnIndex.Technician] = targetGroup;
+      updatedTask[15] = targetGroup;
     }
 
-    updateData(prevData => 
+    setData(prevData => 
       prevData.map(row => 
         getOperationId(row) === operationId ? updatedTask : row
       )
@@ -699,7 +579,8 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
 
     if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
       console.log("Impossible de déplacer une tâche en dehors de sa période");
-      resetDragDrop();
+      setDropZoneActive(null);
+      setDraggedTask(null);
       return;
     }
 
@@ -711,104 +592,10 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
     updateAssignment(operationId, targetGroup);
   }
 
-  resetDragDrop();
-}, [draggedTask, selectedDate, updateAssignment, resetDragDrop]);
-
-// Messages de drag & drop
-const getDragMessage = useCallback((): React.ReactNode => {
-  if (!draggedTask) return null;
-
-  const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
-  const message = isUnassigned
-    ? `Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée ${
-        draggedTask.hasDefinedHours ? '(les heures seront conservées)' : ''
-      }`
-    : draggedTask.task[ColumnIndex.StartDate] !== selectedDate
-    ? `Impossible de déplacer une tâche en dehors de sa période (${draggedTask.task[ColumnIndex.StartDate]})`
-    : "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant";
-
-  return (
-    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-      {isUnassigned && !draggedTask.hasDefinedHours ? (
-        <span className="text-yellow-600">{message}</span>
-      ) : draggedTask.task[ColumnIndex.StartDate] !== selectedDate ? (
-        <span className="text-red-600">{message}</span>
-      ) : (
-        message
-      )}
-    </div>
-  );
-}, [draggedTask, selectedDate]);
-// Composants de rendu principaux
-const renderTable = (dataToRender: string[][]): React.ReactNode => {
-  const visibleColumns = getVisibleColumns();
-  
-  return (
-    <div className="w-full">
-      <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
-        <h2 className="text-lg font-semibold">Vue Tableau</h2>
-        <button
-          onClick={handleExportCSV}
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
-                   transition-colors duration-200 flex items-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Exporter en CSV
-        </button>
-      </div>
-
-      <div className="w-full overflow-y-auto">
-        <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-          <thead>
-            {renderTableHeader()}
-          </thead>
-          <tbody className="bg-white">
-            {dataToRender.map((row, rowIndex) => {
-              const operationId = getOperationId(row);
-              const isEditing = editingRow === operationId;
-              const isUnassigned = !row[ColumnIndex.StartDate] || !row[ColumnIndex.EndDate];
-              const hasHours = hasDefinedHours(row);
-
-              return (
-                <tr
-                  key={operationId}
-                  className={`
-                    ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
-                    ${isEditing ? 'bg-yellow-50' : ''}
-                    ${isUnassigned ? hasHours ? 'bg-blue-50' : 'bg-yellow-50' : ''}
-                    hover:bg-blue-50
-                  `}
-                >
-                  {row.map((cell, cellIndex) => {
-                    if (!visibleColumns.includes(cellIndex)) return null;
-                    
-                    return (
-                      <td
-                        key={cellIndex}
-                        className="border border-gray-300 py-2 px-4 text-sm"
-                      >
-                        <div className="truncate">
-                          {renderCell(row, cell, headers[cellIndex], cellIndex)}
-                        </div>
-                      </td>
-                    );
-                  })}
-                  <td className="border border-gray-300 py-2 px-4">
-                    {renderActionButtons(row, isEditing)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
-
-  
+  setDropZoneActive(null);
+  setDraggedTask(null);
+}, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
+// Composants d'interface de base
 const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
   const operationId = getOperationId(row);
   const isEditing = editingRow === operationId;
@@ -818,16 +605,6 @@ const renderCell = (row: string[], cell: string, header: string, index: number):
       return (
         <input
           type="date"
-          value={editedData[header] || ''}
-          onChange={(e) => handleInputChange(header, e.target.value)}
-          className="w-full p-1 border rounded"
-        />
-      );
-    }
-    if (header.toLowerCase().includes('heure')) {
-      return (
-        <input
-          type="time"
           value={editedData[header] || ''}
           onChange={(e) => handleInputChange(header, e.target.value)}
           className="w-full p-1 border rounded"
@@ -845,6 +622,39 @@ const renderCell = (row: string[], cell: string, header: string, index: number):
   }
   return cell || '';
 };
+
+const renderSettings = (): React.ReactNode => (
+  <Card>
+    <CardContent className="space-y-4 p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold">Paramètres d'affichage</h2>
+        <button
+          onClick={resetColumnVisibility}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Réinitialiser
+        </button>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {columnVisibility.map((col) => (
+          <div key={col.index} className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id={`col-${col.index}`}
+              checked={col.visible}
+              onChange={() => handleColumnVisibilityChange(col.index)}
+              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+            />
+            <label htmlFor={`col-${col.index}`} className="text-sm">
+              {col.name}
+            </label>
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+);
 
 const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
   <div style={{ 
@@ -879,33 +689,102 @@ const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>)
 const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
   if (!task) return null;
   
-  const isUnassigned = !task[ColumnIndex.StartDate] || !task[ColumnIndex.EndDate];
-  const hasHours = hasDefinedHours(task);
+  // Pour les tâches non affectées, afficher un style spécial
+  const isUnassigned = !task[2] || !task[4];
   
-  const content = (
-    <div className="flex items-center gap-1 w-full overflow-hidden">
-      <span className="truncate">
-        {`${task[ColumnIndex.Vehicule] || 'N/A'} - ${task[ColumnIndex.Operation] || 'N/A'}`}
-      </span>
-      {isUnassigned && (
-        <span className={`flex-shrink-0 text-xs px-1 rounded ${
-          hasHours ? 'bg-blue-200 text-blue-800' : 'bg-yellow-200 text-yellow-800'
-        }`}>
-          {hasHours ? 'Non planifiée (heures définies)' : 'Non planifiée'}
+  if (groupBy === 'Technicien') {
+    return (
+      <div className="flex items-center gap-1 w-full overflow-hidden">
+        <span className="truncate">
+          {`${task[0] || 'N/A'} - ${task[1] || 'N/A'}`}
         </span>
-      )}
-      {!isUnassigned && task[ColumnIndex.StartDate] && task[ColumnIndex.EndDate] && 
-       !isSameDay(task[ColumnIndex.StartDate], task[ColumnIndex.EndDate]) && (
-        <span className="flex-shrink-0 text-xs bg-blue-200 text-blue-800 px-1 rounded">
-          Multi-jours
+        {isUnassigned ? (
+          <span className="flex-shrink-0 text-xs bg-yellow-200 text-yellow-800 px-1 rounded">
+            Non planifiée
+          </span>
+        ) : task[2] && task[4] && !isSameDay(task[2], task[4]) && (
+          <span className="flex-shrink-0 text-xs bg-blue-200 text-blue-800 px-1 rounded">
+            Multi-jours
+          </span>
+        )}
+      </div>
+    );
+  }
+  return task[labelIndex] || 'N/A';
+};
+
+const renderFilterReset = (): React.ReactNode => {
+  if (!selectedTask) return null;
+
+  return (
+    <div className="flex items-center justify-end mb-4">
+      <button
+        onClick={() => setSelectedTask(null)}
+        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
+                 transition-colors duration-200 flex items-center gap-2"
+      >
+        <X className="h-4 w-4" />
+        Réinitialiser le filtre
+      </button>
+    </div>
+  );
+};
+
+const renderDateSelector = (): React.ReactNode => (
+  <select 
+    value={selectedDate} 
+    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
+    className="w-full md:w-auto p-2 border rounded"
+  >
+    <option value="">Sélectionnez une date</option>
+    {uniqueDates.map(date => (
+      <option key={date} value={date}>{date}</option>
+    ))}
+  </select>
+);
+
+const renderTechnicianInput = (): React.ReactNode => (
+  <div className="flex flex-wrap items-center gap-2">
+    <input
+      type="text"
+      value={newTechnician}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
+      placeholder="Nouveau technicien"
+      className="flex-1 min-w-[200px] p-2 border rounded"
+    />
+    <button
+      onClick={handleAddTechnician}
+      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+               transition-colors duration-200 whitespace-nowrap"
+      disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
+      title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
+             "Impossible d'ajouter 'Sans technicien'" : ''}
+    >
+      Ajouter Technicien
+    </button>
+  </div>
+);
+
+const getDragMessage = (): React.ReactNode => {
+  if (!draggedTask) return null;
+
+  const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
+
+  return (
+    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+      {isUnassigned ? (
+        "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
+      ) : draggedTask.task[2] !== selectedDate ? (
+        <span className="text-red-600">
+          Impossible de déplacer une tâche en dehors de sa période ({draggedTask.task[2]})
         </span>
+      ) : (
+        "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
       )}
     </div>
   );
-
-  return content;
 };
-
+// Rendu du tableau
 const renderTableHeader = (): React.ReactNode => {
   const visibleColumns = getVisibleColumns();
   
@@ -941,147 +820,156 @@ const renderTableHeader = (): React.ReactNode => {
   );
 };
 
-const renderActionButtons = (row: string[], isEditing: boolean): React.ReactNode => (
-  <div className="flex justify-center gap-2">
-    {isEditing ? (
-      <>
-        <button
-          onClick={() => handleSaveEdit(getOperationId(row))}
-          className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-          title="Enregistrer"
-        >
-          <Save className="h-4 w-4" />
-        </button>
-        <button
-          onClick={handleCancelEdit}
-          className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-          title="Annuler"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </>
-    ) : (
-      <button
-        onClick={() => handleEditClick(row)}
-        className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-        title="Modifier"
-      >
-        <Edit2 className="h-4 w-4" />
-      </button>
-    )}
-  </div>
-);
-
-const renderFilterReset = (): React.ReactNode => {
-  if (!selectedTask) return null;
-
+const renderTable = (dataToRender: string[][]): React.ReactNode => {
+  const visibleColumns = getVisibleColumns();
+  
   return (
-    <div className="flex items-center justify-end mb-4">
-      <button
-        onClick={() => setSelectedTask(null)}
-        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
-                 transition-colors duration-200 flex items-center gap-2"
-      >
-        <X className="h-4 w-4" />
-        Réinitialiser le filtre
-      </button>
+    <div className="w-full">
+      <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
+        <h2 className="text-lg font-semibold">Vue Tableau</h2>
+        <button
+          onClick={handleExportCSV}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
+                   transition-colors duration-200 flex items-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Exporter en CSV
+        </button>
+      </div>
+
+      <div className="w-full overflow-y-auto">
+        <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+          <thead>
+            {renderTableHeader()}
+          </thead>
+          <tbody className="bg-white">
+            {dataToRender.map((row, rowIndex) => {
+              const operationId = getOperationId(row);
+              const isEditing = editingRow === operationId;
+              const isUnassigned = !row[2] || !row[4];
+
+              return (
+                <tr
+                  key={operationId}
+                  className={`
+                    ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                    ${isEditing ? 'bg-yellow-50' : ''}
+                    ${isUnassigned ? 'bg-yellow-50' : ''}
+                    hover:bg-blue-50
+                  `}
+                >
+                  {row.map((cell, cellIndex) => {
+                    if (!visibleColumns.includes(cellIndex)) return null;
+                    
+                    return (
+                      <td
+                        key={cellIndex}
+                        className="border border-gray-300 py-2 px-4 text-sm"
+                      >
+                        <div className="truncate">
+                          {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                        </div>
+                      </td>
+                    );
+                  })}
+                  <td className="border border-gray-300 py-2 px-4">
+                    <div className="flex justify-center gap-2">
+                      {isEditing ? (
+                        <>
+                          <button
+                            onClick={() => handleSaveEdit(operationId)}
+                            className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+                            title="Enregistrer"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                            title="Annuler"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleEditClick(row)}
+                          className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+                          title="Modifier"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
 
-const renderDateSelector = (): React.ReactNode => (
-  <select 
-    value={selectedDate} 
-    onChange={handleDateSelection}
-    className="w-full md:w-auto p-2 border rounded"
-  >
-    <option value="">Sélectionnez une date</option>
-    {uniqueDates.map(date => (
-      <option key={date} value={date}>{date}</option>
-    ))}
-  </select>
-);
-
-const renderTechnicianInput = (): React.ReactNode => (
-  <div className="flex flex-wrap items-center gap-2">
-    <input
-      type="text"
-      value={newTechnician}
-      onChange={handleTechnicianInput}
-      placeholder="Nouveau technicien"
-      className="flex-1 min-w-[200px] p-2 border rounded"
-    />
-    <button
-      onClick={handleAddTechnician}
-      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-               transition-colors duration-200 whitespace-nowrap"
-      disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
-      title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
-             "Impossible d'ajouter 'Sans technicien'" : ''}
-    >
-      Ajouter Technicien
-    </button>
-  </div>
-);
-// Composant Gantt et rendu final
-const renderGanttChart = (groupBy: ViewType): React.ReactNode => {
+// Rendu du Gantt Chart
+const renderGanttChart = (groupBy: string): React.ReactNode => {
   if (!selectedDate) {
     return <p>Veuillez sélectionner une date</p>;
   }
 
-  const {
-    BASE_ROW_HEIGHT,
-    HEADER_HEIGHT,
-    TASK_HEIGHT,
-    TASK_MARGIN
-  } = GANTT_CONSTANTS;
-
+  const BASE_ROW_HEIGHT = 60;
+  const HEADER_HEIGHT = 40;
+  const TASK_HEIGHT = 20;
+  const TASK_MARGIN = 4;
   const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
+
   const filteredDataForDate = filterDataForDate(selectedDate);
-  const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = groupDataByType(groupBy, filteredDataForDate);
+  const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = groupDataByType(groupBy, filteredDataForDate) || {};
 
   if (!groups.length && !unassignedTasks.length) {
     return <p>Aucune donnée à afficher pour cette date</p>;
   }
 
   const groupedData: GanttChartData[] = groups.map(group => {
-    const tasks = group === "Non affectées"
-      ? unassignedTasks.map(task => {
-          const taskHasDefinedHours = hasDefinedHours(task);
+    let tasks: TaskData[];
+    
+    if (group === "Non affectées") {
+      // Pour les tâches non affectées
+      tasks = unassignedTasks.map(task => ({
+        task,
+        startPercentage: 33.33, // 8h du matin en pourcentage
+        duration: 4.17,         // 1 heure en pourcentage
+        operationId: getOperationId(task),
+        isMultiDay: false,
+        isStart: true,
+        isEnd: true,
+        isUnassigned: true
+      }));
+    } else {
+      // Pour les tâches normales
+      tasks = filteredDataForDate
+        .filter(row => row && row[groupIndex] === group)
+        .map(task => {
+          const hasStartAndEnd = Boolean(task[2] && task[4]);
+          const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
+          const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
+          const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
+
           return {
             task,
-            startPercentage: taskHasDefinedHours ? getTimePercentage(task[ColumnIndex.StartTime]) : GANTT_CONSTANTS.DEFAULT_START_PERCENTAGE,
-            duration: taskHasDefinedHours 
-              ? Math.max(0.5, getTimePercentage(task[ColumnIndex.EndTime]) - getTimePercentage(task[ColumnIndex.StartTime])) 
-              : GANTT_CONSTANTS.DEFAULT_DURATION_PERCENTAGE,
+            startPercentage: getTimePercentage(task[3]),
+            duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
             operationId: getOperationId(task),
-            isMultiDay: false,
-            isStart: true,
-            isEnd: true,
-            isUnassigned: true,
-            hasDefinedHours: taskHasDefinedHours
+            isMultiDay,
+            isStart,
+            isEnd,
+            isUnassigned: false
           };
-        })
-      : filteredDataForDate
-          .filter(row => row && row[groupIndex] === group)
-          .map(task => {
-            const hasStartAndEnd = Boolean(task[ColumnIndex.StartDate] && task[ColumnIndex.EndDate]);
-            const isMultiDay = hasStartAndEnd ? !isSameDay(task[ColumnIndex.StartDate], task[ColumnIndex.EndDate]) : false;
-            const isStart = hasStartAndEnd ? isSameDay(task[ColumnIndex.StartDate], selectedDate) : false;
-            const isEnd = hasStartAndEnd ? isSameDay(task[ColumnIndex.EndDate], selectedDate) : false;
-
-            return {
-              task,
-              startPercentage: getTimePercentage(task[ColumnIndex.StartTime]),
-              duration: Math.max(0.5, getTimePercentage(task[ColumnIndex.EndTime]) - getTimePercentage(task[ColumnIndex.StartTime])),
-              operationId: getOperationId(task),
-              isMultiDay,
-              isStart,
-              isEnd,
-              isUnassigned: false,
-              hasDefinedHours: hasDefinedHours(task)
-            };
-          });
+        });
+    }
 
     const overlaps = detectOverlaps(tasks);
     const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
@@ -1097,11 +985,12 @@ const renderGanttChart = (groupBy: ViewType): React.ReactNode => {
   });
 
   return (
-    <div className="overflow-x-auto w-full">
-      <div className="flex min-w-[1000px]">
+    <div style={{ overflowX: 'auto', width: '100%' }}>
+      <div style={{ display: 'flex', minWidth: '1000px' }}>
         {/* Colonne des groupes */}
-        <div className="sticky left-0 z-10 w-[200px]" style={{ borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
-          <div className="flex items-center font-bold px-2.5" style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333' }}>
+        <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
+          <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
+               className="flex items-center font-bold">
             {groupBy}
           </div>
           {groupedData.map(({ group, rowHeight, isUnassignedGroup }, index) => (
@@ -1120,14 +1009,14 @@ const renderGanttChart = (groupBy: ViewType): React.ReactNode => {
         </div>
 
         {/* Zone de contenu */}
-        <div className="flex-1 relative">
+        <div style={{ flex: 1, position: 'relative' }}>
           {renderTimeHeader({ HEADER_HEIGHT })}
           {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
             <div 
               key={group}
               style={{ height: `${rowHeight}px` }}
               className={`
-                relative border-b border-gray-200 transition-colors
+                relative border-b border-gray-200
                 ${dropZoneActive === group ? 'bg-blue-50' : 
                   isUnassignedGroup ? 'bg-yellow-50' : 
                   index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
@@ -1152,16 +1041,18 @@ const renderGanttChart = (groupBy: ViewType): React.ReactNode => {
                       width: `${taskData.duration}%`,
                       height: `${TASK_HEIGHT}px`,
                       top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                      backgroundColor: taskData.isUnassigned 
-                        ? (taskData.hasDefinedHours ? '#93C5FD' : '#FCD34D')
-                        : getUniqueColor(tasks.indexOf(taskData)),
+                      backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
                       borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
                       borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                      cursor: 'pointer',
                       outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
                       boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
                     }}
-                    className="rounded px-1 text-xs overflow-hidden whitespace-nowrap select-none cursor-grab
-                              hover:brightness-90 transition-all duration-200"
+                    className={`
+                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
+                      hover:brightness-90 transition-all duration-200
+                      ${taskData.isUnassigned ? 'text-black' : ''}
+                    `}
                   >
                     {renderGanttTaskContent({
                       task: taskData.task,
@@ -1178,8 +1069,29 @@ const renderGanttChart = (groupBy: ViewType): React.ReactNode => {
     </div>
   );
 };
+// Configuration des onglets et rendu final
+const renderTabButtons = (): React.ReactNode => (
+  <div className="flex flex-wrap gap-2">
+    {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
+      <button
+        key={index}
+        onClick={() => setActiveTab(index)}
+        className={`
+          px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
+          ${activeTab === index 
+            ? 'bg-blue-500 text-white shadow-md scale-105' 
+            : 'bg-white hover:bg-gray-100'
+          }
+        `}
+      >
+        {title === 'Paramètres' && <Settings className="h-4 w-4" />}
+        {title}
+      </button>
+    ))}
+  </div>
+);
 
-const renderGanttView = (groupBy: ViewType, showTechnicianInput: boolean = false) => (
+const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
   <div className="space-y-8">
     <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
       {renderDateSelector()}
@@ -1198,8 +1110,7 @@ const renderGanttView = (groupBy: ViewType, showTechnicianInput: boolean = false
           <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
         )}
         <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
-        <p>Les tâches non planifiées avec heures définies sont en bleu clair.</p>
-        <p>Les tâches non planifiées sans heures définies sont en jaune.</p>
+        <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
       </div>
 
       {selectedDate && (
@@ -1217,26 +1128,25 @@ const renderGanttView = (groupBy: ViewType, showTechnicianInput: boolean = false
   </div>
 );
 
-// Configuration des onglets et rendu principal
 const tabContent = [
   { 
-    title: ViewType.Table, 
-    content: renderTable(filteredData()) 
+    title: 'Tableau', 
+    content: renderTable(filteredData) 
   },
   {
-    title: ViewType.Vehicle,
-    content: renderGanttView(ViewType.Vehicle)
+    title: 'Vue Véhicule',
+    content: renderGanttView('Véhicule')
   },
   {
-    title: ViewType.Location,
-    content: renderGanttView(ViewType.Location)
+    title: 'Vue Lieu',
+    content: renderGanttView('Lieu')
   },
   {
-    title: ViewType.Technician,
-    content: renderGanttView(ViewType.Technician, true)
+    title: 'Vue Technicien',
+    content: renderGanttView('Technicien', true)
   },
   {
-    title: ViewType.Settings,
+    title: 'Paramètres',
     content: renderSettings()
   }
 ];
@@ -1245,6 +1155,7 @@ const tabContent = [
 return (
   <div className="container mx-auto p-4 min-h-screen bg-gray-50">
     <div className="mb-6 space-y-4">
+      {/* Section upload de fichier */}
       <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
         <input 
           type="file" 
@@ -1253,26 +1164,12 @@ return (
           className="flex-1"
         />
       </div>
-      <div className="flex flex-wrap gap-2">
-        {tabContent.map((tab, index) => (
-          <button
-            key={index}
-            onClick={() => setActiveTab(index)}
-            className={`
-              px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
-              ${activeTab === index 
-                ? 'bg-blue-500 text-white shadow-md scale-105' 
-                : 'bg-white hover:bg-gray-100'
-              }
-            `}
-          >
-            {tab.title === ViewType.Settings && <Settings className="h-4 w-4" />}
-            {tab.title}
-          </button>
-        ))}
-      </div>
+
+      {/* Onglets */}
+      {renderTabButtons()}
     </div>
 
+    {/* Contenu principal */}
     <Card>
       <CardContent>
         {tabContent[activeTab].content}
@@ -1282,5 +1179,8 @@ return (
 );
 };
 
-// Export avec mémorisation pour les performances
-export default React.memo(CSVViewer);
+// Mémo du composant pour de meilleures performances
+const MemoizedCSVViewer = React.memo(CSVViewer);
+
+// Export par défaut du composant
+export default MemoizedCSVViewer;
