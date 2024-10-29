@@ -286,7 +286,7 @@ const handleDateSelection = (e: React.ChangeEvent<HTMLSelectElement>): void => {
   setSelectedTask(null); // Réinitialiser la tâche sélectionnée lors du changement de date
 };
 
-const handleTaskSelection = (operationId: string) => {
+const handleTaskClick = (operationId: string) => {
   setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
 };
 
