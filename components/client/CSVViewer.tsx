@@ -764,32 +764,7 @@ const CSVViewer: React.FC = () => {
     );
   };
   // Composants d'interface de base
-  const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
-    const operationId = getOperationId(row);
-    const isEditing = editingRow === operationId;
-
-    if (isEditing) {
-      if (header.toLowerCase().includes('date')) {
-        return (
-          <input
-            type="date"
-            value={editedData[header] || ''}
-            onChange={(e) => handleInputChange(header, e.target.value)}
-            className="w-full p-1 border rounded"
-          />
-        );
-      }
-      return (
-        <input
-          type="text"
-          value={editedData[header] || ''}
-          onChange={(e) => handleInputChange(header, e.target.value)}
-          className="w-full p-1 border rounded"
-        />
-      );
-    }
-    return cell || '';
-  };
+ 
 
   const renderSettings = (): React.ReactNode => (
     <Card>
