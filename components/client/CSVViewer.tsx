@@ -608,15 +608,6 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
   setDraggedTask(null);
 }, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
 // Gestion de l'édition
-const handleEditClick = (row: string[]): void => {
-  const operationId = getOperationId(row);
-  setEditingRow(operationId);
-  const rowData: Record<string, string> = {};
-  headers.forEach((header, index) => {
-    rowData[header] = row[index] || '';
-  });
-  setEditedData(rowData);
-};
 
 const handleCancelEdit = (): void => {
   setEditingRow(null);
