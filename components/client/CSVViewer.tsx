@@ -71,7 +71,6 @@ interface RenderProps {
 
 // Début du composant principal
 const CSVViewer: React.FC = () => {
-  // Le contenu du composant commence ici...
   // États du composant
   const [data, setData] = useState<string[][]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -89,7 +88,39 @@ const CSVViewer: React.FC = () => {
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
 
-  // useEffect pour la gestion des touches clavier et la visibilité des colonnes
+// Fonctions utilitaires de base pour la gestion du temps
+const getTimePercentage = (time: string): number => {
+  if (!time) return 33.33; // 8:00 par défaut
+  try {
+    const [hours, minutes] = time.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return 33.33;
+    return ((hours * 60 + minutes) / (24 * 60)) * 100;
+  } catch (err) {
+    console.error('Erreur lors du calcul du pourcentage de temps:', err);
+    return 33.33;
+  }
+};
+
+const calculateDuration = (startTime: string, endTime: string): number => {
+  // Si pas d'heure de fin ou de début, retourne 1 heure (4.17%)
+  if (!startTime || !endTime) return 4.17;
+
+  try {
+    const startPercentage = getTimePercentage(startTime);
+    const endPercentage = getTimePercentage(endTime);
+    
+    // Si l'heure de fin est avant l'heure de début, on suppose que ça continue le jour suivant
+    if (endPercentage <= startPercentage) {
+      return (100 - startPercentage) + endPercentage;
+    }
+    
+    return endPercentage - startPercentage;
+  } catch (err) {
+    console.error('Erreur lors du calcul de la durée:', err);
+    return 4.17; // Retourne 1 heure par défaut
+  }
+};
+// useEffect pour la gestion des touches clavier et la visibilité des colonnes
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F7') {
@@ -112,31 +143,6 @@ const CSVViewer: React.FC = () => {
     }
   }, [headers]);
 
-  // Fonction utilitaire pour mettre à jour l'assignation d'une tâche
-  // Définie ici car utilisée dans handleDrop et d'autres fonctions
-  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
-    setData(prevData => {
-      return prevData.map(row => {
-        if (getOperationId(row) === operationId) {
-          const newRow = [...row];
-          newRow[15] = newTechnician;
-          return newRow;
-        }
-        return row;
-      });
-    });
-  }, []);
-
-  // Fonction pour assigner une date à une tâche
-  // Définie ici car utilisée dans handleDrop
-  const assignDateToTask = (task: string[], targetDate: string): string[] => {
-    const updatedTask = [...task];
-    updatedTask[2] = targetDate;  // Date de début
-    updatedTask[3] = '08:00';     // Heure de début par défaut
-    updatedTask[4] = targetDate;  // Date de fin
-    updatedTask[5] = '09:00';     // Heure de fin par défaut (1 heure plus tard)
-    return updatedTask;
-  };
   // Fonctions utilitaires de base
   const isSameDay = (date1: string, date2: string): boolean => {
     if (!date1 || !date2) return false;
@@ -154,18 +160,6 @@ const CSVViewer: React.FC = () => {
   const getUniqueColor = (index: number): string => {
     const hue = (index * 137.508) % 360;
     return `hsl(${hue}, 70%, 50%)`;
-  };
-
-  const getTimePercentage = (time: string): number => {
-    if (!time) return 33.33; // 8:00 par défaut
-    try {
-      const [hours, minutes] = time.split(':').map(Number);
-      if (isNaN(hours) || isNaN(minutes)) return 33.33;
-      return ((hours * 60 + minutes) / (24 * 60)) * 100;
-    } catch (err) {
-      console.error('Erreur lors du calcul du pourcentage de temps:', err);
-      return 33.33;
-    }
   };
 
   const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
@@ -251,7 +245,6 @@ const CSVViewer: React.FC = () => {
       [header]: value
     }));
   };
-
   // Fonctions d'édition
   const handleInputChange = (header: string, value: string): void => {
     setEditedData(prev => ({
@@ -283,6 +276,7 @@ const CSVViewer: React.FC = () => {
     setEditingRow(null);
     setEditedData({});
   };
+
   // Gestion des fichiers CSV
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
@@ -376,6 +370,24 @@ const CSVViewer: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  const handleAddTechnician = (): void => {
+    const trimmedTechnician = newTechnician.trim();
+    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
+      setAllTechnicians(prev => {
+        if (prev.includes(trimmedTechnician)) {
+          return prev;
+        }
+        const technicians = prev.filter(tech => tech !== "Sans technicien");
+        technicians.push(trimmedTechnician);
+        technicians.sort((a, b) => a.localeCompare(b));
+        if (prev.includes("Sans technicien")) {
+          technicians.push("Sans technicien");
+        }
+        return technicians;
+      });
+      setNewTechnician('');
+    }
+  };
   // Fonctions de traitement des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
@@ -458,24 +470,6 @@ const CSVViewer: React.FC = () => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
 
-  const handleAddTechnician = (): void => {
-    const trimmedTechnician = newTechnician.trim();
-    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
-      setAllTechnicians(prev => {
-        if (prev.includes(trimmedTechnician)) {
-          return prev;
-        }
-        const technicians = prev.filter(tech => tech !== "Sans technicien");
-        technicians.push(trimmedTechnician);
-        technicians.sort((a, b) => a.localeCompare(b));
-        if (prev.includes("Sans technicien")) {
-          technicians.push("Sans technicien");
-        }
-        return technicians;
-      });
-      setNewTechnician('');
-    }
-  };
   // Gestion du drag & drop et interactions
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
@@ -532,6 +526,28 @@ const CSVViewer: React.FC = () => {
     setDropZoneActive(null);
   }, []);
 
+  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+    setData(prevData => {
+      return prevData.map(row => {
+        if (getOperationId(row) === operationId) {
+          const newRow = [...row];
+          newRow[15] = newTechnician;
+          return newRow;
+        }
+        return row;
+      });
+    });
+  }, []);
+
+  const assignDateToTask = (task: string[], targetDate: string): string[] => {
+    const updatedTask = [...task];
+    updatedTask[2] = targetDate;  // Date de début
+    updatedTask[3] = '08:00';     // Heure de début par défaut
+    updatedTask[4] = targetDate;  // Date de fin
+    updatedTask[5] = '09:00';     // Heure de fin par défaut (1 heure plus tard)
+    return updatedTask;
+  };
+
   const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     e.stopPropagation();
@@ -557,7 +573,6 @@ const CSVViewer: React.FC = () => {
       updatedTask[15] = targetGroup;
 
       setData(prevData => {
-        // On s'assure de ne mettre à jour que la tâche spécifique
         return prevData.map(row => 
           getOperationId(row) === operationId ? updatedTask : row
         );
@@ -579,18 +594,16 @@ const CSVViewer: React.FC = () => {
         return;
       }
 
-      // Mise à jour de l'assignation sans dupliquer la tâche
       updateAssignment(operationId, targetGroup);
     }
 
     setDropZoneActive(null);
     setDraggedTask(null);
-  }, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
+  }, [draggedTask, selectedDate, updateAssignment]);
 
   const handleTaskClick = (operationId: string) => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
-
   // Messages de feedback pour le drag & drop
   const getDragMessage = (): React.ReactNode => {
     if (!draggedTask) return null;
@@ -611,6 +624,7 @@ const CSVViewer: React.FC = () => {
       </div>
     );
   };
+
   // Composants de rendu de base
   const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
@@ -800,159 +814,161 @@ const CSVViewer: React.FC = () => {
       ))}
     </div>
   );
-// Ajouter ceci juste avant la définition de renderGanttView
-const renderGanttChart = (groupBy: string): React.ReactNode => {
-  if (!selectedDate) {
-    return <p>Veuillez sélectionner une date</p>;
-  }
 
-  const BASE_ROW_HEIGHT = 60;
-  const HEADER_HEIGHT = 40;
-  const TASK_HEIGHT = 20;
-  const TASK_MARGIN = 4;
-  const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
-
-  const filteredDataForDate = filterDataForDate(selectedDate);
-  const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = groupDataByType(groupBy, filteredDataForDate) || {};
-
-  if (!groups.length && !unassignedTasks.length) {
-    return <p>Aucune donnée à afficher pour cette date</p>;
-  }
-
-  const groupedData: GanttChartData[] = groups.map(group => {
-    let tasks: TaskData[];
-    
-    if (group === "Non affectées") {
-      tasks = unassignedTasks.map(task => ({
-        task,
-        startPercentage: 33.33, // 8h du matin en pourcentage
-        duration: 4.17,         // 1 heure en pourcentage
-        operationId: getOperationId(task),
-        isMultiDay: false,
-        isStart: true,
-        isEnd: true,
-        isUnassigned: true
-      }));
-    } else {
-      tasks = filteredDataForDate
-        .filter(row => row && row[groupIndex] === group)
-        .map(task => {
-          const hasStartAndEnd = Boolean(task[2] && task[4]);
-          const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
-          const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
-          const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
-
-          return {
-            task,
-            startPercentage: getTimePercentage(task[3]),
-            duration: Math.max(0.5, getTimePercentage(task[5]) - getTimePercentage(task[3])),
-            operationId: getOperationId(task),
-            isMultiDay,
-            isStart,
-            isEnd,
-            isUnassigned: false
-          };
-        });
+  const renderGanttChart = (groupBy: string): React.ReactNode => {
+    if (!selectedDate) {
+      return <p>Veuillez sélectionner une date</p>;
     }
 
-    const overlaps = detectOverlaps(tasks);
-    const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
-    const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
+    const BASE_ROW_HEIGHT = 60;
+    const HEADER_HEIGHT = 40;
+    const TASK_HEIGHT = 20;
+    const TASK_MARGIN = 4;
+    const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
 
-    return {
-      group,
-      tasks,
-      overlaps,
-      rowHeight,
-      isUnassignedGroup: group === "Non affectées"
-    };
-  });
+    const filteredDataForDate = filterDataForDate(selectedDate);
+    const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = 
+      groupDataByType(groupBy, filteredDataForDate) || {};
 
-  return (
-    <div style={{ overflowX: 'auto', width: '100%' }}>
-      <div style={{ display: 'flex', minWidth: '1000px' }}>
-        {/* Colonne des groupes */}
-        <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
-          <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
-               className="flex items-center font-bold">
-            {groupBy}
+    if (!groups.length && !unassignedTasks.length) {
+      return <p>Aucune donnée à afficher pour cette date</p>;
+    }
+
+    const groupedData: GanttChartData[] = groups.map(group => {
+      let tasks: TaskData[];
+      
+      if (group === "Non affectées") {
+        tasks = unassignedTasks.map(task => ({
+          task,
+          startPercentage: 33.33, // 8h du matin en pourcentage
+          duration: calculateDuration(task[3], task[5]), // Utilisation de calculateDuration
+          operationId: getOperationId(task),
+          isMultiDay: false,
+          isStart: true,
+          isEnd: true,
+          isUnassigned: true
+        }));
+      } else {
+        tasks = filteredDataForDate
+          .filter(row => row && row[groupIndex] === group)
+          .map(task => {
+            const hasStartAndEnd = Boolean(task[2] && task[4]);
+            const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
+            const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
+            const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
+
+            return {
+              task,
+              startPercentage: getTimePercentage(task[3]),
+              duration: calculateDuration(task[3], task[5]), // Utilisation de calculateDuration
+              operationId: getOperationId(task),
+              isMultiDay,
+              isStart,
+              isEnd,
+              isUnassigned: false
+            };
+          });
+      }
+
+      const overlaps = detectOverlaps(tasks);
+      const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
+      const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
+
+      return {
+        group,
+        tasks,
+        overlaps,
+        rowHeight,
+        isUnassignedGroup: group === "Non affectées"
+      };
+    });
+
+    return (
+      <div style={{ overflowX: 'auto', width: '100%' }}>
+        <div style={{ display: 'flex', minWidth: '1000px' }}>
+          {/* Colonne des groupes */}
+          <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
+            <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
+                 className="flex items-center font-bold">
+              {groupBy}
+            </div>
+            {groupedData.map(({ group, rowHeight, isUnassignedGroup }, index) => (
+              <div 
+                key={group} 
+                style={{ height: `${rowHeight}px` }}
+                className={`
+                  flex items-center px-2.5 border-b border-gray-200
+                  ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                  ${group === 'Sans technicien' ? 'text-red-500' : ''}
+                `}
+              >
+                {group || 'N/A'}
+              </div>
+            ))}
           </div>
-          {groupedData.map(({ group, rowHeight, isUnassignedGroup }, index) => (
-            <div 
-              key={group} 
-              style={{ height: `${rowHeight}px` }}
-              className={`
-                flex items-center px-2.5 border-b border-gray-200
-                ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                ${group === 'Sans technicien' ? 'text-red-500' : ''}
-              `}
-            >
-              {group || 'N/A'}
-            </div>
-          ))}
-        </div>
 
-        {/* Zone de contenu */}
-        <div style={{ flex: 1, position: 'relative' }}>
-          {renderTimeHeader({ HEADER_HEIGHT })}
-          {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
-            <div 
-              key={group}
-              style={{ height: `${rowHeight}px` }}
-              className={`
-                relative border-b border-gray-200
-                ${dropZoneActive === group ? 'bg-blue-50' : 
-                  isUnassignedGroup ? 'bg-yellow-50' : 
-                  index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-              `}
-              onDragOver={handleDragOver}
-              onDragEnter={(e) => handleDragEnter(e, group)}
-              onDragLeave={(e) => handleDragLeave(e, group)}
-              onDrop={(e) => handleDrop(group, e)}
-            >
-              {tasks.map((taskData) => {
-                const verticalPosition = overlaps.get(taskData.operationId) || 0;
-                return (
-                  <div
-                    key={`${taskData.operationId}_${selectedDate}`}
-                    draggable={true}
-                    onDragStart={(e) => handleDragStart(e, taskData)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => handleTaskClick(taskData.operationId)}
-                    style={{
-                      position: 'absolute',
-                      left: `${taskData.startPercentage}%`,
-                      width: `${taskData.duration}%`,
-                      height: `${TASK_HEIGHT}px`,
-                      top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                      backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
-                      borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                      borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
-                      cursor: 'pointer',
-                      outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
-                      boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
-                    }}
-                    className={`
-                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
-                      hover:brightness-90 transition-all duration-200
-                      ${taskData.isUnassigned ? 'text-black' : ''}
-                    `}
-                  >
-                    {renderGanttTaskContent({
-                      task: taskData.task,
-                      groupBy,
-                      labelIndex
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+          {/* Zone de contenu */}
+          <div style={{ flex: 1, position: 'relative' }}>
+            {renderTimeHeader({ HEADER_HEIGHT })}
+            {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
+              <div 
+                key={group}
+                style={{ height: `${rowHeight}px` }}
+                className={`
+                  relative border-b border-gray-200
+                  ${dropZoneActive === group ? 'bg-blue-50' : 
+                    isUnassignedGroup ? 'bg-yellow-50' : 
+                    index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                `}
+                onDragOver={handleDragOver}
+                onDragEnter={(e) => handleDragEnter(e, group)}
+                onDragLeave={(e) => handleDragLeave(e, group)}
+                onDrop={(e) => handleDrop(group, e)}
+              >
+                {tasks.map((taskData) => {
+                  const verticalPosition = overlaps.get(taskData.operationId) || 0;
+                  return (
+                    <div
+                      key={`${taskData.operationId}_${selectedDate}`}
+                      draggable={true}
+                      onDragStart={(e) => handleDragStart(e, taskData)}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => handleTaskClick(taskData.operationId)}
+                      style={{
+                        position: 'absolute',
+                        left: `${taskData.startPercentage}%`,
+                        width: `${taskData.duration}%`,
+                        height: `${TASK_HEIGHT}px`,
+                        top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+                        backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
+                        borderLeft: !taskData.isStart ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                        borderRight: !taskData.isEnd ? '4px solid rgba(0,0,0,0.3)' : undefined,
+                        cursor: 'pointer',
+                        outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
+                        boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
+                      }}
+                      className={`
+                        rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
+                        hover:brightness-90 transition-all duration-200
+                        ${taskData.isUnassigned ? 'text-black' : ''}
+                      `}
+                    >
+                      {renderGanttTaskContent({
+                        task: taskData.task,
+                        groupBy,
+                        labelIndex
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
+
   const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -989,7 +1005,6 @@ const renderGanttChart = (groupBy: string): React.ReactNode => {
       </div>
     </div>
   );
-
   const renderTableHeader = (): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
