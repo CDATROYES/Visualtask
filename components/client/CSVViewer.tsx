@@ -740,7 +740,28 @@ const CSVViewer: React.FC = () => {
       </div>
     );
   };
+  // Ajoutez cette fonction dans la partie 5 avec les autres fonctions de rendu
 
+  const renderTabButtons = (): React.ReactNode => (
+    <div className="flex flex-wrap gap-2">
+      {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
+        <button
+          key={index}
+          onClick={() => setActiveTab(index)}
+          className={`
+            px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
+            ${activeTab === index 
+              ? 'bg-blue-500 text-white shadow-md scale-105' 
+              : 'bg-white hover:bg-gray-100'
+            }
+          `}
+        >
+          {title === 'Paramètres' && <Settings className="h-4 w-4" />}
+          {title}
+        </button>
+      ))}
+    </div>
+  );
   const getDragMessage = (): React.ReactNode => {
     if (!draggedTask) return null;
 
