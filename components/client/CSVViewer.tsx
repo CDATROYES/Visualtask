@@ -69,6 +69,11 @@ interface RenderProps {
   labelIndex: number;
 }
 
+interface TaskTiming {
+  startPercentage: number;
+  duration: number;
+}
+
 // Début du composant principal
 const CSVViewer: React.FC = () => {
   // États du composant
@@ -88,39 +93,72 @@ const CSVViewer: React.FC = () => {
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
 
-// Fonctions utilitaires de base pour la gestion du temps
-const getTimePercentage = (time: string): number => {
-  if (!time) return 33.33; // 8:00 par défaut
-  try {
-    const [hours, minutes] = time.split(':').map(Number);
-    if (isNaN(hours) || isNaN(minutes)) return 33.33;
-    return ((hours * 60 + minutes) / (24 * 60)) * 100;
-  } catch (err) {
-    console.error('Erreur lors du calcul du pourcentage de temps:', err);
-    return 33.33;
-  }
-};
-
-const calculateDuration = (startTime: string, endTime: string): number => {
-  // Si pas d'heure de fin ou de début, retourne 1 heure (4.17%)
-  if (!startTime || !endTime) return 4.17;
-
-  try {
-    const startPercentage = getTimePercentage(startTime);
-    const endPercentage = getTimePercentage(endTime);
+  // Fonctions utilitaires de base pour la gestion du temps
+  const getTimePercentage = (time: string, isStartOfDay: boolean = false, isEndOfDay: boolean = false): number => {
+    if (isStartOfDay) return 0;     // Début de journée (00:00)
+    if (isEndOfDay) return 100;     // Fin de journée (23:59)
+    if (!time) return 33.33;        // 8:00 par défaut
     
-    // Si l'heure de fin est avant l'heure de début, on suppose que ça continue le jour suivant
-    if (endPercentage <= startPercentage) {
-      return (100 - startPercentage) + endPercentage;
+    try {
+      const [hours, minutes] = time.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes)) return 33.33;
+      return ((hours * 60 + minutes) / (24 * 60)) * 100;
+    } catch (err) {
+      console.error('Erreur lors du calcul du pourcentage de temps:', err);
+      return 33.33;
     }
-    
-    return endPercentage - startPercentage;
-  } catch (err) {
-    console.error('Erreur lors du calcul de la durée:', err);
-    return 4.17; // Retourne 1 heure par défaut
-  }
-};
-// useEffect pour la gestion des touches clavier et la visibilité des colonnes
+  };
+  // Fonction de calcul des durées pour les tâches multi-jours
+  const calculateTaskTiming = (task: string[], currentDate: string): TaskTiming => {
+    const startDate = task[2];
+    const endDate = task[4];
+    const startTime = task[3];
+    const endTime = task[5];
+
+    // Si pas de dates, retourne les valeurs par défaut
+    if (!startDate || !endDate) {
+      return {
+        startPercentage: getTimePercentage(startTime),
+        duration: 4.17 // 1 heure par défaut
+      };
+    }
+
+    const isFirstDay = isSameDay(startDate, currentDate);
+    const isLastDay = isSameDay(endDate, currentDate);
+    const isMiddleDay = !isFirstDay && !isLastDay;
+
+    // Jour intermédiaire : tâche sur toute la journée
+    if (isMiddleDay) {
+      return {
+        startPercentage: 0,
+        duration: 100
+      };
+    }
+
+    // Premier jour : de l'heure de début jusqu'à la fin de la journée
+    if (isFirstDay && !isLastDay) {
+      return {
+        startPercentage: getTimePercentage(startTime),
+        duration: 100 - getTimePercentage(startTime)
+      };
+    }
+
+    // Dernier jour : du début de la journée jusqu'à l'heure de fin
+    if (isLastDay && !isFirstDay) {
+      return {
+        startPercentage: 0,
+        duration: getTimePercentage(endTime)
+      };
+    }
+
+    // Même jour (début et fin le même jour)
+    return {
+      startPercentage: getTimePercentage(startTime),
+      duration: getTimePercentage(endTime) - getTimePercentage(startTime)
+    };
+  };
+
+  // useEffect pour la gestion des touches clavier et la visibilité des colonnes
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F7') {
@@ -214,7 +252,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       )
     );
   };
-
   const getVisibleColumns = () => {
     return columnVisibility
       .filter(col => col.visible)
@@ -295,6 +332,45 @@ const calculateDuration = (startTime: string, endTime: string): number => {
 
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
+
+  // Fonction de filtrage des données par date mise à jour
+  const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
+    if (!dateStr || !data.length) return [];
+
+    try {
+      const dateObj = new Date(dateStr);
+      dateObj.setHours(0, 0, 0, 0);
+
+      let filteredByDate = data.filter((row: string[]) => {
+        // Si un operationId est spécifié, ne retourner que cette tâche
+        if (operationId) {
+          return getOperationId(row) === operationId;
+        }
+
+        // Si la tâche n'a pas de date, ne pas l'inclure dans le filtre par date
+        if (!row[2] || !row[4]) return false;
+
+        try {
+          const startDate = new Date(row[2]);
+          startDate.setHours(0, 0, 0, 0);
+          const endDate = new Date(row[4]);
+          endDate.setHours(23, 59, 59, 999);
+          
+          // La tâche est visible si la date sélectionnée est entre la date de début et de fin
+          return startDate <= dateObj && dateObj <= endDate;
+        } catch (err) {
+          console.error('Erreur lors du filtrage des dates:', err);
+          return false;
+        }
+      });
+
+      return filteredByDate;
+    } catch (err) {
+      console.error('Erreur lors du filtrage des données:', err);
+      return [];
+    }
+  }, [data]);
+
   // Fonctions d'édition
   const handleInputChange = (header: string, value: string): void => {
     setEditedData(prev => ({
@@ -326,7 +402,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
     setEditingRow(null);
     setEditedData({});
   };
-
   // Gestion des fichiers CSV
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
@@ -345,6 +420,10 @@ const calculateDuration = (startTime: string, endTime: string): number => {
               const endDate = new Date(updatedRow[4]);
               updatedRow[2] = startDate.toISOString().split('T')[0];
               updatedRow[4] = endDate.toISOString().split('T')[0];
+
+              // S'assurer que les heures sont au format correct pour les tâches multi-jours
+              if (!updatedRow[3]) updatedRow[3] = '08:00';
+              if (!updatedRow[5]) updatedRow[5] = '17:00';
             }
             return updatedRow;
           });
@@ -361,6 +440,7 @@ const calculateDuration = (startTime: string, endTime: string): number => {
             const startDate = new Date(row[2]);
             const endDate = new Date(row[4]);
 
+            // Génération de toutes les dates entre début et fin pour les tâches multi-jours
             for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
               allDatesSet.add(date.toISOString().split('T')[0]);
             }
@@ -442,41 +522,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       setNewTechnician('');
     }
   };
-  // Fonctions de traitement des données
-  const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
-    if (!dateStr || !data.length) return [];
-
-    try {
-      const dateObj = new Date(dateStr);
-      dateObj.setHours(0, 0, 0, 0);
-
-      let filteredByDate = data.filter((row: string[]) => {
-        // Si un operationId est spécifié, ne retourner que cette tâche
-        if (operationId) {
-          return getOperationId(row) === operationId;
-        }
-
-        // Si la tâche n'a pas de date, ne pas l'inclure dans le filtre par date
-        if (!row[2] || !row[4]) return false;
-
-        try {
-          const startDate = new Date(row[2]);
-          startDate.setHours(0, 0, 0, 0);
-          const endDate = new Date(row[4]);
-          endDate.setHours(23, 59, 59, 999);
-          return startDate <= dateObj && dateObj <= endDate;
-        } catch (err) {
-          console.error('Erreur lors du filtrage des dates:', err);
-          return false;
-        }
-      });
-
-      return filteredByDate;
-    } catch (err) {
-      console.error('Erreur lors du filtrage des données:', err);
-      return [];
-    }
-  }, [data]);
 
   // Gestion du drag & drop et interactions
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
@@ -509,7 +554,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       document.body.removeChild(ghostElement);
     });
   };
-
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -552,7 +596,7 @@ const calculateDuration = (startTime: string, endTime: string): number => {
     updatedTask[2] = targetDate;  // Date de début
     updatedTask[3] = '08:00';     // Heure de début par défaut
     updatedTask[4] = targetDate;  // Date de fin
-    updatedTask[5] = '09:00';     // Heure de fin par défaut (1 heure plus tard)
+    updatedTask[5] = '17:00';     // Heure de fin par défaut (journée complète)
     return updatedTask;
   };
 
@@ -590,6 +634,7 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       const startDateObj = new Date(startDate);
       const endDateObj = new Date(endDate);
 
+      // Vérifier si la date sélectionnée est dans la plage de dates de la tâche
       if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
         console.log("Impossible de déplacer une tâche en dehors de sa période");
         setDropZoneActive(null);
@@ -612,19 +657,23 @@ const calculateDuration = (startTime: string, endTime: string): number => {
   const handleTaskClick = (operationId: string) => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
+
   // Messages de feedback pour le drag & drop
   const getDragMessage = (): React.ReactNode => {
     if (!draggedTask) return null;
 
     const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
+    const isInValidDateRange = draggedTask.startDate && draggedTask.endDate && 
+                              new Date(selectedDate) >= new Date(draggedTask.startDate) && 
+                              new Date(selectedDate) <= new Date(draggedTask.endDate);
 
     return (
       <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
         {isUnassigned ? (
           "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
-        ) : draggedTask.task[2] !== selectedDate ? (
+        ) : !isInValidDateRange ? (
           <span className="text-red-600">
-            Impossible de déplacer une tâche en dehors de sa période ({draggedTask.task[2]})
+            Impossible de déplacer une tâche en dehors de sa période ({draggedTask.startDate} - {draggedTask.endDate})
           </span>
         ) : (
           "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
@@ -649,6 +698,16 @@ const calculateDuration = (startTime: string, endTime: string): number => {
           />
         );
       }
+      if (header.toLowerCase().includes('heure')) {
+        return (
+          <input
+            type="time"
+            value={editedData[header] || ''}
+            onChange={(e) => handleInputChange(header, e.target.value)}
+            className="w-full p-1 border rounded"
+          />
+        );
+      }
       return (
         <input
           type="text"
@@ -660,40 +719,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
     }
     return cell || '';
   };
-
-  const renderSettings = (): React.ReactNode => (
-    <Card>
-      <CardContent className="space-y-4 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Paramètres d'affichage</h2>
-          <button
-            onClick={resetColumnVisibility}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Réinitialiser
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {columnVisibility.map((col) => (
-            <div key={col.index} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id={`col-${col.index}`}
-                checked={col.visible}
-                onChange={() => handleColumnVisibilityChange(col.index)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label htmlFor={`col-${col.index}`} className="text-sm">
-                {col.name}
-              </label>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
     <div style={{ 
       height: `${HEADER_HEIGHT}px`, 
@@ -724,105 +749,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
     </div>
   );
 
-  const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
-    if (!task) return null;
-    
-    const isUnassigned = !task[2] || !task[4];
-    
-    if (groupBy === 'Technicien') {
-      return (
-        <div className="flex items-center gap-1 w-full overflow-hidden">
-          <span className="truncate">
-            {`${task[0] || 'N/A'} - ${task[1] || 'N/A'}`}
-          </span>
-          {isUnassigned ? (
-            <span className="flex-shrink-0 text-xs bg-yellow-200 text-yellow-800 px-1 rounded">
-              Non planifiée
-            </span>
-          ) : task[2] && task[4] && !isSameDay(task[2], task[4]) && (
-            <span className="flex-shrink-0 text-xs bg-blue-200 text-blue-800 px-1 rounded">
-              Multi-jours
-            </span>
-          )}
-        </div>
-      );
-    }
-    return task[labelIndex] || 'N/A';
-  };
-
-  const renderDateSelector = (): React.ReactNode => (
-    <select 
-      value={selectedDate} 
-      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
-      className="w-full md:w-auto p-2 border rounded"
-    >
-      <option value="">Sélectionnez une date</option>
-      {uniqueDates.map(date => (
-        <option key={date} value={date}>{date}</option>
-      ))}
-    </select>
-  );
-
-  const renderTechnicianInput = (): React.ReactNode => (
-    <div className="flex flex-wrap items-center gap-2">
-      <input
-        type="text"
-        value={newTechnician}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
-        placeholder="Nouveau technicien"
-        className="flex-1 min-w-[200px] p-2 border rounded"
-      />
-      <button
-        onClick={handleAddTechnician}
-        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-                 transition-colors duration-200 whitespace-nowrap"
-        disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
-        title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
-               "Impossible d'ajouter 'Sans technicien'" : ''}
-      >
-        Ajouter Technicien
-      </button>
-    </div>
-  );
-
-  const renderFilterReset = (): React.ReactNode => {
-    if (!selectedTask) return null;
-
-    return (
-      <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={() => setSelectedTask(null)}
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
-                   transition-colors duration-200 flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Réinitialiser le filtre
-        </button>
-      </div>
-    );
-  };
-  // Configuration des onglets et rendu principal
-  const renderTabButtons = (): React.ReactNode => (
-    <div className="flex flex-wrap gap-2">
-      {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
-        <button
-          key={index}
-          onClick={() => setActiveTab(index)}
-          className={`
-            px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
-            ${activeTab === index 
-              ? 'bg-blue-500 text-white shadow-md scale-105' 
-              : 'bg-white hover:bg-gray-100'
-            }
-          `}
-        >
-          {title === 'Paramètres' && <Settings className="h-4 w-4" />}
-          {title}
-        </button>
-      ))}
-    </div>
-  );
-
   const renderGanttChart = (groupBy: string): React.ReactNode => {
     if (!selectedDate) {
       return <p>Veuillez sélectionner une date</p>;
@@ -849,8 +775,8 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       if (group === "Non affectées") {
         tasks = unassignedTasks.map(task => ({
           task,
-          startPercentage: 33.33,
-          duration: calculateDuration(task[3], task[5]),
+          startPercentage: 33.33, // 8h du matin en pourcentage
+          duration: 33.33,        // Durée par défaut pour les tâches non affectées
           operationId: getOperationId(task),
           isMultiDay: false,
           isStart: true,
@@ -858,7 +784,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
           isUnassigned: true
         }));
       } else {
-        // Filtrer les tâches pour ce groupe
         tasks = filteredDataForDate
           .filter(row => row && row[groupIndex] === group)
           .map(task => {
@@ -867,10 +792,13 @@ const calculateDuration = (startTime: string, endTime: string): number => {
             const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
             const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
 
+            // Utiliser calculateTaskTiming pour déterminer la position et la durée
+            const { startPercentage, duration } = calculateTaskTiming(task, selectedDate);
+
             return {
               task,
-              startPercentage: getTimePercentage(task[3]),
-              duration: calculateDuration(task[3], task[5]),
+              startPercentage,
+              duration,
               operationId: getOperationId(task),
               isMultiDay,
               isStart,
@@ -983,7 +911,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       </div>
     );
   };
-
   const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -1002,7 +929,12 @@ const calculateDuration = (startTime: string, endTime: string): number => {
           {showTechnicianInput && (
             <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
           )}
-          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
+          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales :</p>
+          <ul className="list-disc pl-6">
+            <li>Bordure gauche : début de la tâche sur un jour précédent</li>
+            <li>Bordure droite : fin de la tâche sur un jour suivant</li>
+            <li>Les deux bordures : tâche s'étendant sur plusieurs jours</li>
+          </ul>
           <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
         </div>
 
@@ -1020,134 +952,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       </div>
     </div>
   );
-  const renderTableHeader = (): React.ReactNode => {
-    const visibleColumns = getVisibleColumns();
-    
-    return (
-      <tr>
-        {headers.map((header, index) => {
-          if (!visibleColumns.includes(index)) return null;
-          
-          return (
-            <th
-              key={index}
-              className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
-            >
-              <div className="flex flex-col gap-1">
-                <span className="truncate">{header}</span>
-                {isFiltering && (
-                  <input
-                    type="text"
-                    value={filters[header] || ''}
-                    onChange={(e) => handleFilterChange(header, e.target.value)}
-                    placeholder={`Filtrer ${header}`}
-                    className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
-                  />
-                )}
-              </div>
-            </th>
-          );
-        })}
-        <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
-          Actions
-        </th>
-      </tr>
-    );
-  };
-
-  const renderTable = (dataToRender: string[][]): React.ReactNode => {
-    const visibleColumns = getVisibleColumns();
-    
-    return (
-      <div className="w-full">
-        <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
-          <h2 className="text-lg font-semibold">Vue Tableau</h2>
-          <button
-            onClick={handleExportCSV}
-            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
-                     transition-colors duration-200 flex items-center gap-2"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Exporter en CSV
-          </button>
-        </div>
-
-        <div className="w-full overflow-y-auto">
-          <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-            <thead>
-              {renderTableHeader()}
-            </thead>
-            <tbody className="bg-white">
-              {dataToRender.map((row, rowIndex) => {
-                const operationId = getOperationId(row);
-                const isEditing = editingRow === operationId;
-                const isUnassigned = !row[2] || !row[4];
-
-                return (
-                  <tr
-                    key={operationId}
-                    className={`
-                      ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
-                      ${isEditing ? 'bg-yellow-50' : ''}
-                      ${isUnassigned ? 'bg-yellow-50' : ''}
-                      hover:bg-blue-50
-                    `}
-                  >
-                    {row.map((cell, cellIndex) => {
-                      if (!visibleColumns.includes(cellIndex)) return null;
-                      
-                      return (
-                        <td
-                          key={cellIndex}
-                          className="border border-gray-300 py-2 px-4 text-sm"
-                        >
-                          <div className="truncate">
-                            {renderCell(row, cell, headers[cellIndex], cellIndex)}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="border border-gray-300 py-2 px-4">
-                      <div className="flex justify-center gap-2">
-                        {isEditing ? (
-                          <>
-                            <button
-                              onClick={() => handleSaveEdit(operationId)}
-                              className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-                              title="Enregistrer"
-                            >
-                              <Save className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-                              title="Annuler"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handleEditClick(row)}
-                            className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-                            title="Modifier"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
 
   // Configuration des onglets
   const tabContent = [
@@ -1173,6 +977,40 @@ const calculateDuration = (startTime: string, endTime: string): number => {
     }
   ];
 
+  const renderTabButtons = (): React.ReactNode => (
+    <div className="flex flex-wrap gap-2">
+      {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
+        <button
+          key={index}
+          onClick={() => setActiveTab(index)}
+          className={`
+            px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
+            ${activeTab === index 
+              ? 'bg-blue-500 text-white shadow-md scale-105' 
+              : 'bg-white hover:bg-gray-100'
+            }
+          `}
+        >
+          {title === 'Paramètres' && <Settings className="h-4 w-4" />}
+          {title}
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderDateSelector = (): React.ReactNode => (
+    <select 
+      value={selectedDate} 
+      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
+      className="w-full md:w-auto p-2 border rounded"
+    >
+      <option value="">Sélectionnez une date</option>
+      {uniqueDates.map(date => (
+        <option key={date} value={date}>{date}</option>
+      ))}
+    </select>
+  );
+
   // Rendu principal du composant
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
@@ -1185,6 +1023,13 @@ const calculateDuration = (startTime: string, endTime: string): number => {
             accept=".csv" 
             className="flex-1"
           />
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
+                   transition-colors duration-200 flex items-center gap-2"
+          >
+            Exporter CSV
+          </button>
         </div>
 
         {/* Onglets */}
