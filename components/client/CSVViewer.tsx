@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X, Settings } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
-// Interfaces
+// Interfaces principales
 interface ColumnVisibility {
   index: number;
   visible: boolean;
@@ -38,7 +38,8 @@ interface TaskData {
   isStart: boolean;
   isEnd: boolean;
   isUnassigned?: boolean;
-  dayStartPercentage?: number;
+  // Nouveaux champs pour gérer les pourcentages sur la journée
+  dayStartPercentage?: number; 
   dayEndPercentage?: number;
 }
 
@@ -64,8 +65,9 @@ interface RenderProps {
   labelIndex: number;
 }
 
+// Début du composant principal
 const CSVViewer: React.FC = () => {
-  // États
+  // États du composant
   const [data, setData] = useState<string[][]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -83,157 +85,157 @@ const CSVViewer: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
 
   // ... Suite dans la prochaine partie
-  // useEffects
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F7') {
-        setIsFiltering(prev => !prev);
-      }
+  // Fonctions utilitaires de base pour la gestion du temps
+const getTimePercentage = (time: string): number => {
+  if (!time) return 0; // Modifié pour commencer à minuit
+  try {
+    const [hours, minutes] = time.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return 0;
+    return ((hours * 60 + minutes) / (24 * 60)) * 100;
+  } catch (err) {
+    console.error('Erreur lors du calcul du pourcentage de temps:', err);
+    return 0;
+  }
+};
+
+const calculateDuration = (startTime: string, endTime: string): number => {
+  if (!startTime || !endTime) return 4.17; // ~1 heure par défaut
+
+  try {
+    const startPercentage = getTimePercentage(startTime);
+    const endPercentage = getTimePercentage(endTime);
+    return endPercentage - startPercentage;
+  } catch (err) {
+    console.error('Erreur lors du calcul de la durée:', err);
+    return 4.17;
+  }
+};
+
+// Nouvelle fonction pour calculer les pourcentages de la journée
+const calculateDayPercentages = (task: string[], selectedDate: string) => {
+  if (!task[2] || !task[4]) return { dayStartPercentage: 0, dayEndPercentage: 100 };
+  
+  if (isSameDay(task[2], task[4])) {
+    // Même jour: utiliser les heures réelles
+    return {
+      dayStartPercentage: getTimePercentage(task[3]),
+      dayEndPercentage: getTimePercentage(task[5])
     };
+  }
+  
+  if (isSameDay(selectedDate, task[2])) {
+    // Premier jour: de l'heure de début à minuit
+    return {
+      dayStartPercentage: getTimePercentage(task[3]),
+      dayEndPercentage: 100
+    };
+  } else if (isSameDay(selectedDate, task[4])) {
+    // Dernier jour: de minuit à l'heure de fin
+    return {
+      dayStartPercentage: 0,
+      dayEndPercentage: getTimePercentage(task[5])
+    };
+  } else {
+    // Jours intermédiaires: toute la journée
+    return {
+      dayStartPercentage: 0,
+      dayEndPercentage: 100
+    };
+  }
+};
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+// Fonctions utilitaires pour dates et IDs
+const isSameDay = (date1: string, date2: string): boolean => {
+  if (!date1 || !date2) return false;
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth() === d2.getMonth() &&
+         d1.getDate() === d2.getDate();
+};
 
-  useEffect(() => {
-    if (headers.length > 0 && columnVisibility.length === 0) {
-      const initialVisibility = headers.map((header, index) => ({
-        index,
-        visible: [0,1,2,3,4,5,10,11,15,16].includes(index),
-        name: header
-      }));
-      setColumnVisibility(initialVisibility);
-    }
-  }, [headers]);
+const getOperationId = (task: string[]): string => {
+  return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
+};
 
-  // Fonctions utilitaires de base
-  const getTimePercentage = (time: string): number => {
-    if (!time) return 0;
-    try {
-      const [hours, minutes] = time.split(':').map(Number);
-      if (isNaN(hours) || isNaN(minutes)) return 0;
-      return ((hours * 60 + minutes) / (24 * 60)) * 100;
-    } catch (err) {
-      console.error('Erreur lors du calcul du pourcentage de temps:', err);
-      return 0;
-    }
-  };
+const getUniqueColor = (index: number): string => {
+  const hue = (index * 137.508) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+};
 
-  const calculateDuration = (startTime: string, endTime: string): number => {
-    if (!startTime || !endTime) return 4.17;
-
-    try {
-      const startPercentage = getTimePercentage(startTime);
-      const endPercentage = getTimePercentage(endTime);
-      
-      return endPercentage - startPercentage;
-    } catch (err) {
-      console.error('Erreur lors du calcul de la durée:', err);
-      return 4.17;
-    }
-  };
-
-  const calculateDayPercentages = useCallback((
-    task: string[], 
-    selectedDate: string
-  ): { dayStartPercentage: number; dayEndPercentage: number } => {
-    const startDate = new Date(task[2]);
-    const endDate = new Date(task[4]);
-    const currentDate = new Date(selectedDate);
+const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const aStart = a.dayStartPercentage ?? a.startPercentage;
+    const bStart = b.dayStartPercentage ?? b.startPercentage;
     
-    if (isSameDay(task[2], task[4])) {
-      return {
-        dayStartPercentage: getTimePercentage(task[3]),
-        dayEndPercentage: getTimePercentage(task[5])
-      };
+    if (aStart === bStart) {
+      const aEnd = a.dayEndPercentage ?? (a.startPercentage + a.duration);
+      const bEnd = b.dayEndPercentage ?? (b.startPercentage + b.duration);
+      return bEnd - aEnd;
     }
-    
-    if (isSameDay(selectedDate, task[2])) {
-      return {
-        dayStartPercentage: getTimePercentage(task[3]),
-        dayEndPercentage: 100
-      };
-    } else if (isSameDay(selectedDate, task[4])) {
-      return {
-        dayStartPercentage: 0,
-        dayEndPercentage: getTimePercentage(task[5])
-      };
-    } else {
-      return {
-        dayStartPercentage: 0,
-        dayEndPercentage: 100
-      };
-    }
-  }, []);
+    return aStart - bStart;
+  });
 
-  const isSameDay = (date1: string, date2: string): boolean => {
-    if (!date1 || !date2) return false;
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
-  };
+  const overlaps = new Map<string, number>();
+  const timeSlots = new Map<string, string>();
 
-  const getOperationId = (task: string[]): string => {
-    return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
-  };
+  for (let i = 0; i < sortedTasks.length; i++) {
+    const currentTask = sortedTasks[i];
+    const currentId = getOperationId(currentTask.task);
+    const start = currentTask.dayStartPercentage ?? currentTask.startPercentage;
+    const end = currentTask.dayEndPercentage ?? 
+                (currentTask.startPercentage + currentTask.duration);
 
-  const getUniqueColor = (index: number): string => {
-    const hue = (index * 137.508) % 360;
-    return `hsl(${hue}, 70%, 50%)`;
-  };
+    let level = 0;
+    let foundSlot = false;
 
-  const detectOverlaps = (tasks: TaskData[]): Map<string, number> => {
-    const sortedTasks = [...tasks].sort((a, b) => {
-      const aStart = a.dayStartPercentage ?? a.startPercentage;
-      const bStart = b.dayStartPercentage ?? b.startPercentage;
-      
-      if (aStart === bStart) {
-        const aEnd = a.dayEndPercentage ?? (a.startPercentage + a.duration);
-        const bEnd = b.dayEndPercentage ?? (b.startPercentage + b.duration);
-        return bEnd - aEnd;
-      }
-      return aStart - bStart;
-    });
-
-    const overlaps = new Map<string, number>();
-    const timeSlots = new Map<string, string>();
-
-    for (let i = 0; i < sortedTasks.length; i++) {
-      const currentTask = sortedTasks[i];
-      const currentId = getOperationId(currentTask.task);
-      const start = currentTask.dayStartPercentage ?? currentTask.startPercentage;
-      const end = currentTask.dayEndPercentage ?? 
-                  (currentTask.startPercentage + currentTask.duration);
-
-      let level = 0;
-      let foundSlot = false;
-
-      while (!foundSlot) {
-        foundSlot = true;
-        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-          const timeKey = `${level}_${time}`;
-          if (timeSlots.has(timeKey)) {
-            foundSlot = false;
-            level++;
-            break;
-          }
+    while (!foundSlot) {
+      foundSlot = true;
+      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+        const timeKey = `${level}_${time}`;
+        if (timeSlots.has(timeKey)) {
+          foundSlot = false;
+          level++;
+          break;
         }
       }
-
-      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-        timeSlots.set(`${level}_${time}`, currentId);
-      }
-
-      overlaps.set(currentId, level);
     }
 
-    return overlaps;
+    for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+      timeSlots.set(`${level}_${time}`, currentId);
+    }
+
+    overlaps.set(currentId, level);
+  }
+
+  return overlaps;
+};
+
+// useEffect pour la gestion des touches clavier et la visibilité des colonnes
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'F7') {
+      setIsFiltering(prev => !prev);
+    }
   };
 
-  // ... Suite dans la partie suivante
-  // Fonctions de gestion des données
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+}, []);
+
+useEffect(() => {
+  if (headers.length > 0 && columnVisibility.length === 0) {
+    const initialVisibility = headers.map((header, index) => ({
+      index,
+      visible: [0,1,2,3,4,5,10,11,15,16].includes(index),
+      name: header
+    }));
+    setColumnVisibility(initialVisibility);
+  }
+}, [headers]);
+
+// ... Suite dans la partie suivante
+// Fonctions de gestion des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -312,6 +314,7 @@ const CSVViewer: React.FC = () => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
 
+  // Fonctions de gestion des colonnes
   const handleFilterChange = (header: string, value: string): void => {
     setFilters(prev => ({
       ...prev,
@@ -344,6 +347,7 @@ const CSVViewer: React.FC = () => {
     );
   };
 
+  // Gestion des techniciens
   const handleAddTechnician = (): void => {
     const trimmedTechnician = newTechnician.trim();
     if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
@@ -363,15 +367,7 @@ const CSVViewer: React.FC = () => {
     }
   };
 
-  const assignDateToTask = (task: string[], targetDate: string): string[] => {
-    const updatedTask = [...task];
-    updatedTask[2] = targetDate;
-    updatedTask[3] = '00:00';
-    updatedTask[4] = targetDate;
-    updatedTask[5] = '23:59';
-    return updatedTask;
-  };
-
+  // Gestion des données filtrées
   const filteredData = data.filter(row => {
     return headers.every((header, index) => {
       const filterValue = (filters[header] || '').toLowerCase();
@@ -380,8 +376,18 @@ const CSVViewer: React.FC = () => {
     });
   });
 
+  // Fonction pour assigner une date à une tâche
+  const assignDateToTask = (task: string[], targetDate: string): string[] => {
+    const updatedTask = [...task];
+    updatedTask[2] = targetDate;
+    updatedTask[3] = '00:00';    // Modifié pour commencer à minuit
+    updatedTask[4] = targetDate;
+    updatedTask[5] = '23:59';    // Modifié pour finir à la fin de la journée
+    return updatedTask;
+  };
+
   // ... Suite dans la partie suivante
-  // Gestion du drag & drop et des événements
+  // Gestion du drag & drop
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
     const taskData: DraggedTaskData = {
@@ -508,7 +514,7 @@ const CSVViewer: React.FC = () => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
 
-  // Gestion du fichier CSV
+  // Gestion des fichiers CSV
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -579,6 +585,33 @@ const CSVViewer: React.FC = () => {
 
   // ... Suite dans la partie suivante
   // Composants de rendu de base
+  const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
+    const operationId = getOperationId(row);
+    const isEditing = editingRow === operationId;
+
+    if (isEditing) {
+      if (header.toLowerCase().includes('date')) {
+        return (
+          <input
+            type="date"
+            value={editedData[header] || ''}
+            onChange={(e) => handleInputChange(header, e.target.value)}
+            className="w-full p-1 border rounded"
+          />
+        );
+      }
+      return (
+        <input
+          type="text"
+          value={editedData[header] || ''}
+          onChange={(e) => handleInputChange(header, e.target.value)}
+          className="w-full p-1 border rounded"
+        />
+      );
+    }
+    return cell || '';
+  };
+
   const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
     <div style={{ 
       height: `${HEADER_HEIGHT}px`, 
@@ -723,44 +756,6 @@ const CSVViewer: React.FC = () => {
     );
   };
 
-  const renderFilterReset = (): React.ReactNode => {
-    if (!selectedTask) return null;
-
-    return (
-      <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={() => setSelectedTask(null)}
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
-                   transition-colors duration-200 flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Réinitialiser le filtre
-        </button>
-      </div>
-    );
-  };
-
-  const renderTabButtons = (): React.ReactNode => (
-    <div className="flex flex-wrap gap-2">
-      {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
-        <button
-          key={index}
-          onClick={() => setActiveTab(index)}
-          className={`
-            px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
-            ${activeTab === index 
-              ? 'bg-blue-500 text-white shadow-md scale-105' 
-              : 'bg-white hover:bg-gray-100'
-            }
-          `}
-        >
-          {title === 'Paramètres' && <Settings className="h-4 w-4" />}
-          {title}
-        </button>
-      ))}
-    </div>
-  );
-
   // ... Suite dans la partie suivante
   // Rendu du Gantt Chart
   const renderGanttChart = (groupBy: string): React.ReactNode => {
@@ -794,9 +789,7 @@ const CSVViewer: React.FC = () => {
           isMultiDay: false,
           isStart: true,
           isEnd: true,
-          isUnassigned: true,
-          dayStartPercentage: 0,
-          dayEndPercentage: 100
+          isUnassigned: true
         }));
       } else {
         tasks = filteredDataForDate
@@ -807,6 +800,7 @@ const CSVViewer: React.FC = () => {
             const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
             const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
 
+            // Calculer les pourcentages de début et fin pour cette journée
             const { dayStartPercentage, dayEndPercentage } = calculateDayPercentages(task, selectedDate);
 
             return {
@@ -881,6 +875,8 @@ const CSVViewer: React.FC = () => {
               >
                 {tasks.map((taskData) => {
                   const verticalPosition = overlaps.get(taskData.operationId) || 0;
+                  
+                  // Utiliser les pourcentages de journée pour le positionnement
                   const displayStartPercentage = taskData.dayStartPercentage ?? taskData.startPercentage;
                   const displayEndPercentage = taskData.dayEndPercentage ?? (taskData.startPercentage + taskData.duration);
                   const displayWidth = displayEndPercentage - displayStartPercentage;
@@ -907,6 +903,7 @@ const CSVViewer: React.FC = () => {
                         rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
                         hover:brightness-90 transition-all duration-200
                         ${taskData.isUnassigned ? 'text-black' : ''}
+                        ${taskData.isMultiDay ? 'border-2 border-blue-300' : ''}
                       `}
                     >
                       {renderGanttTaskContent({
@@ -969,6 +966,127 @@ const CSVViewer: React.FC = () => {
     </div>
   );
 
+  const renderTable = (dataToRender: string[][]): React.ReactNode => {
+    const visibleColumns = getVisibleColumns();
+    
+    return (
+      <div className="w-full">
+        <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
+          <h2 className="text-lg font-semibold">Vue Tableau</h2>
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
+                     transition-colors duration-200 flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Exporter en CSV
+          </button>
+        </div>
+
+        <div className="w-full overflow-x-auto">
+          <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+            <thead>
+              <tr>
+                {headers.map((header, index) => {
+                  if (!visibleColumns.includes(index)) return null;
+                  
+                  return (
+                    <th
+                      key={index}
+                      className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className="truncate">{header}</span>
+                        {isFiltering && (
+                          <input
+                            type="text"
+                            value={filters[header] || ''}
+                            onChange={(e) => handleFilterChange(header, e.target.value)}
+                            placeholder={`Filtrer ${header}`}
+                            className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
+                          />
+                        )}
+                      </div>
+                    </th>
+                  );
+                })}
+                <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white">
+              {dataToRender.map((row, rowIndex) => {
+                const operationId = getOperationId(row);
+                const isEditing = editingRow === operationId;
+                const isUnassigned = !row[2] || !row[4];
+
+                return (
+                  <tr
+                    key={operationId}
+                    className={`
+                      ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                      ${isEditing ? 'bg-yellow-50' : ''}
+                      ${isUnassigned ? 'bg-yellow-50' : ''}
+                      hover:bg-blue-50
+                    `}
+                  >
+                    {row.map((cell, cellIndex) => {
+                      if (!visibleColumns.includes(cellIndex)) return null;
+                      
+                      return (
+                        <td
+                          key={cellIndex}
+                          className="border border-gray-300 py-2 px-4 text-sm"
+                        >
+                          <div className="truncate">
+                            {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td className="border border-gray-300 py-2 px-4">
+                      <div className="flex justify-center gap-2">
+                        {isEditing ? (
+                          <>
+                            <button
+                              onClick={() => handleSaveEdit(operationId)}
+                              className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+                              title="Enregistrer"
+                            >
+                              <Save className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                              title="Annuler"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleEditClick(row)}
+                            className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+                            title="Modifier"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   // Configuration des onglets
   const tabContent = [
     { 
@@ -993,28 +1111,6 @@ const CSVViewer: React.FC = () => {
     }
   ];
 
-  const handleExportCSV = (): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
-    });
-    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
-    downloadCSV(csv, fileName);
-  };
-
-  const downloadCSV = (content: string, fileName: string): void => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
-
   // Rendu principal du composant
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
@@ -1027,15 +1123,6 @@ const CSVViewer: React.FC = () => {
             accept=".csv" 
             className="flex-1"
           />
-          {data.length > 0 && (
-            <button
-              onClick={handleExportCSV}
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
-                       transition-colors duration-200 flex items-center gap-2"
-            >
-              Exporter CSV
-            </button>
-          )}
         </div>
 
         {/* Onglets */}
@@ -1052,5 +1139,5 @@ const CSVViewer: React.FC = () => {
   );
 };
 
-// Export du composant mémorisé pour de meilleures performances
-export default memo(CSVViewer);
+// Export du composant mémorisé
+export default React.memo(CSVViewer);
