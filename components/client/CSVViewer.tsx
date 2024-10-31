@@ -347,6 +347,40 @@ useEffect(() => {
     );
   };
 
+  // Fonctions d'édition
+  const handleInputChange = (header: string, value: string): void => {
+    setEditedData(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  };
+
+  const handleEditClick = (row: string[]): void => {
+    const operationId = getOperationId(row);
+    setEditingRow(operationId);
+    const rowData: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      rowData[header] = row[index] || '';
+    });
+    setEditedData(rowData);
+  };
+
+  const handleCancelEdit = (): void => {
+    setEditingRow(null);
+    setEditedData({});
+  };
+
+  const handleSaveEdit = (operationId: string): void => {
+    setData(prevData => 
+      prevData.map(row => getOperationId(row) === operationId 
+        ? headers.map(header => editedData[header] || '')
+        : row
+      )
+    );
+    setEditingRow(null);
+    setEditedData({});
+  };
+
   // Gestion des techniciens
   const handleAddTechnician = (): void => {
     const trimmedTechnician = newTechnician.trim();
@@ -367,15 +401,6 @@ useEffect(() => {
     }
   };
 
-  // Gestion des données filtrées
-  const filteredData = data.filter(row => {
-    return headers.every((header, index) => {
-      const filterValue = (filters[header] || '').toLowerCase();
-      const cellValue = (row[index] || '').toString().toLowerCase();
-      return !filterValue || cellValue.includes(filterValue);
-    });
-  });
-
   // Fonction pour assigner une date à une tâche
   const assignDateToTask = (task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
@@ -385,6 +410,15 @@ useEffect(() => {
     updatedTask[5] = '23:59';    // Modifié pour finir à la fin de la journée
     return updatedTask;
   };
+
+  // Gestion des données filtrées
+  const filteredData = data.filter(row => {
+    return headers.every((header, index) => {
+      const filterValue = (filters[header] || '').toLowerCase();
+      const cellValue = (row[index] || '').toString().toLowerCase();
+      return !filterValue || cellValue.includes(filterValue);
+    });
+  });
 
   // ... Suite dans la partie suivante
   // Gestion du drag & drop
