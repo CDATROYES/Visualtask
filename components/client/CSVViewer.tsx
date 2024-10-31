@@ -245,6 +245,56 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       [header]: value
     }));
   };
+
+  // Fonction modifiée pour le regroupement des données
+  const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
+    let groupIndex: number;
+    let labelIndex: number;
+    let groups: string[] = [];
+    
+    // Obtenir uniquement les tâches non affectées qui ne sont pas dans filteredDataForDate
+    const unassignedTasks = data
+      .filter(row => (!row[2] || !row[4]) && // Pas de date de début ou de fin
+              !filteredDataForDate.some(filterRow => 
+                getOperationId(filterRow) === getOperationId(row)
+              ));
+
+    switch (groupBy) {
+      case 'Véhicule':
+        groupIndex = 0;
+        labelIndex = 1;
+        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+          .filter(Boolean)
+          .sort();
+        break;
+      case 'Lieu':
+        groupIndex = 10;
+        labelIndex = 1;
+        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+          .filter(Boolean)
+          .sort();
+        break;
+      case 'Technicien':
+        groupIndex = 15;
+        labelIndex = 15;
+        // Pour la vue Technicien, on utilise tous les techniciens disponibles
+        groups = allTechnicians.filter(tech => tech !== "Sans technicien");
+        // Ajouter "Sans technicien" à la fin si nécessaire
+        if (allTechnicians.includes("Sans technicien")) {
+          groups.push("Sans technicien");
+        }
+        break;
+      default:
+        return { groups: [], groupIndex: 0, labelIndex: 0, unassignedTasks: [] };
+    }
+
+    // Ajouter le groupe "Non affectées" seulement s'il y a des tâches non affectées
+    if (unassignedTasks.length > 0 && !groups.includes("Non affectées")) {
+      groups.push("Non affectées");
+    }
+
+    return { groups, groupIndex, labelIndex, unassignedTasks };
+  }, [allTechnicians, data]);
   // Fonctions d'édition
   const handleInputChange = (header: string, value: string): void => {
     setEditedData(prev => ({
@@ -320,15 +370,17 @@ const calculateDuration = (startTime: string, endTime: string): number => {
           }
         });
 
-        // Conversion des Sets en Arrays avec Array.from()
+        // Conversion des Sets en Arrays et tri
         const sortedDates = Array.from(allDatesSet)
           .filter(date => date)
           .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
+        // Gestion des techniciens : on conserve tous les techniciens, même sans tâches
         const sortedTechnicians = Array.from(technicianSet)
           .filter(tech => tech && tech !== "Sans technicien")
           .sort((a, b) => a.localeCompare(b));
 
+        // Ajout de "Sans technicien" à la fin
         if (technicianSet.has("Sans technicien")) {
           sortedTechnicians.push("Sans technicien");
         }
@@ -377,9 +429,11 @@ const calculateDuration = (startTime: string, endTime: string): number => {
         if (prev.includes(trimmedTechnician)) {
           return prev;
         }
+        // On ajoute le nouveau technicien en conservant le tri
         const technicians = prev.filter(tech => tech !== "Sans technicien");
         technicians.push(trimmedTechnician);
         technicians.sort((a, b) => a.localeCompare(b));
+        // On s'assure que "Sans technicien" reste à la fin
         if (prev.includes("Sans technicien")) {
           technicians.push("Sans technicien");
         }
@@ -423,52 +477,6 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       return [];
     }
   }, [data]);
-
-  const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
-    let groupIndex: number;
-    let labelIndex: number;
-    let groups: string[] = [];
-    
-    // Obtenir uniquement les tâches non affectées qui ne sont pas dans filteredDataForDate
-    const unassignedTasks = data
-      .filter(row => (!row[2] || !row[4]) && // Pas de date de début ou de fin
-              !filteredDataForDate.some(filterRow => 
-                getOperationId(filterRow) === getOperationId(row)
-              ));
-
-    switch (groupBy) {
-      case 'Véhicule':
-        groupIndex = 0;
-        labelIndex = 1;
-        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
-          .filter(Boolean)
-          .sort();
-        break;
-      case 'Lieu':
-        groupIndex = 10;
-        labelIndex = 1;
-        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
-          .filter(Boolean)
-          .sort();
-        break;
-      case 'Technicien':
-        groupIndex = 15;
-        labelIndex = 15;
-        groups = allTechnicians.filter(tech => 
-          filteredDataForDate.some(row => row[15] === tech) || tech === "Sans technicien"
-        );
-        break;
-      default:
-        return { groups: [], groupIndex: 0, labelIndex: 0, unassignedTasks: [] };
-    }
-
-    // Ajouter le groupe "Non affectées" seulement s'il y a des tâches non affectées
-    if (unassignedTasks.length > 0 && !groups.includes("Non affectées")) {
-      groups.push("Non affectées");
-    }
-
-    return { groups, groupIndex, labelIndex, unassignedTasks };
-  }, [allTechnicians, data]);
 
   // Gestion du drag & drop et interactions
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
@@ -830,7 +838,8 @@ const calculateDuration = (startTime: string, endTime: string): number => {
     const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = 
       groupDataByType(groupBy, filteredDataForDate) || {};
 
-    if (!groups.length && !unassignedTasks.length) {
+    // Pour la vue Technicien, on continue même s'il n'y a pas de données
+    if (!groups.length && !unassignedTasks.length && groupBy !== 'Technicien') {
       return <p>Aucune donnée à afficher pour cette date</p>;
     }
 
@@ -840,8 +849,8 @@ const calculateDuration = (startTime: string, endTime: string): number => {
       if (group === "Non affectées") {
         tasks = unassignedTasks.map(task => ({
           task,
-          startPercentage: 33.33, // 8h du matin en pourcentage
-          duration: calculateDuration(task[3], task[5]), // Utilisation de calculateDuration
+          startPercentage: 33.33,
+          duration: calculateDuration(task[3], task[5]),
           operationId: getOperationId(task),
           isMultiDay: false,
           isStart: true,
@@ -849,6 +858,7 @@ const calculateDuration = (startTime: string, endTime: string): number => {
           isUnassigned: true
         }));
       } else {
+        // Filtrer les tâches pour ce groupe
         tasks = filteredDataForDate
           .filter(row => row && row[groupIndex] === group)
           .map(task => {
@@ -860,7 +870,7 @@ const calculateDuration = (startTime: string, endTime: string): number => {
             return {
               task,
               startPercentage: getTimePercentage(task[3]),
-              duration: calculateDuration(task[3], task[5]), // Utilisation de calculateDuration
+              duration: calculateDuration(task[3], task[5]),
               operationId: getOperationId(task),
               isMultiDay,
               isStart,
@@ -961,6 +971,11 @@ const calculateDuration = (startTime: string, endTime: string): number => {
                     </div>
                   );
                 })}
+                {tasks.length === 0 && groupBy === 'Technicien' && !isUnassignedGroup && (
+                  <div className="h-full w-full flex items-center justify-center text-gray-400 italic">
+                    Aucune tâche assignée
+                  </div>
+                )}
               </div>
             ))}
           </div>
