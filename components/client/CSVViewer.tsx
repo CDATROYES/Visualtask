@@ -64,6 +64,16 @@ interface RenderProps {
   labelIndex: number;
 }
 
+// Fonction de formatage des dates
+const formatDate = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  
+  return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
+};
+
 // Début du composant principal
 const CSVViewer: React.FC = () => {
   // États du composant
@@ -158,9 +168,10 @@ const CSVViewer: React.FC = () => {
     selectedDate: string
   ): { dayStartPercentage: number; dayEndPercentage: number } => {
     if (!task[2] || !task[4]) {
+      const hasTime = Boolean(task[3] && task[5]);
       return { 
-        dayStartPercentage: 33.33, // 8:00 pour les tâches non planifiées
-        dayEndPercentage: 37.5     // 9:00 pour les tâches non planifiées
+        dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+        dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.5
       };
     }
     
@@ -236,7 +247,7 @@ const CSVViewer: React.FC = () => {
   }, []);
 
   // ... Suite dans la partie 3
-// Fonctions de gestion des données
+  // Fonctions de gestion des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -444,10 +455,14 @@ const CSVViewer: React.FC = () => {
       startDate: task.task[2] || null,
       endDate: task.task[4] || null,
       originalTechnician: task.task[15],
-      startPercentage: task.isUnassigned ? 33.33 : (task.dayStartPercentage ?? task.startPercentage),
-      duration: task.isUnassigned ? 4.17 : (task.dayEndPercentage 
-        ? task.dayEndPercentage - (task.dayStartPercentage ?? 0)
-        : task.duration)
+      startPercentage: task.isUnassigned && task.task[3] && task.task[5] 
+        ? getTimePercentage(task.task[3])
+        : task.dayStartPercentage ?? task.startPercentage,
+      duration: task.isUnassigned && task.task[3] && task.task[5]
+        ? calculateDuration(task.task[3], task.task[5])
+        : task.dayEndPercentage 
+          ? task.dayEndPercentage - (task.dayStartPercentage ?? 0)
+          : task.duration
     };
 
     setDraggedTask(taskData);
@@ -561,7 +576,7 @@ const CSVViewer: React.FC = () => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
 
-  // Gestion des fichiers CSV
+  // Gestion des fichiers CSV avec génération de toutes les dates
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -586,27 +601,40 @@ const CSVViewer: React.FC = () => {
         setData(processedData);
         setHeaders(results.data[0]);
 
-        // Utilisation de Set pour les dates et techniciens uniques
-        const allDatesSet = new Set<string>();
-        const technicianSet = new Set<string>();
+        // Trouver dates min et max
+        let minDate: Date | null = null;
+        let maxDate: Date | null = null;
 
         processedData.forEach((row: string[]) => {
           if (row[2] && row[4]) {
             const startDate = new Date(row[2]);
             const endDate = new Date(row[4]);
-
-            for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
-              allDatesSet.add(date.toISOString().split('T')[0]);
-            }
+            
+            if (!minDate || startDate < minDate) minDate = startDate;
+            if (!maxDate || endDate > maxDate) maxDate = endDate;
           }
+        });
+
+        // Générer toutes les dates de la période
+        const allDates: string[] = [];
+        if (minDate && maxDate) {
+          const currentDate = new Date(minDate);
+          while (currentDate <= maxDate) {
+            allDates.push(currentDate.toISOString().split('T')[0]);
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+        }
+
+        // Tri des dates
+        const sortedDates = allDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+        setUniqueDates(sortedDates);
+
+        const technicianSet = new Set<string>();
+        processedData.forEach((row: string[]) => {
           if (row[15]) {
             technicianSet.add(row[15].trim());
           }
         });
-
-        const sortedDates = Array.from(allDatesSet)
-          .filter(date => date)
-          .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
         const sortedTechnicians = Array.from(technicianSet)
           .filter(tech => tech && tech !== "Sans technicien")
@@ -616,7 +644,6 @@ const CSVViewer: React.FC = () => {
           sortedTechnicians.push("Sans technicien");
         }
 
-        setUniqueDates(sortedDates);
         setAllTechnicians(sortedTechnicians);
 
         const initialFilters: Record<string, string> = {};
@@ -724,7 +751,9 @@ const CSVViewer: React.FC = () => {
     >
       <option value="">Sélectionnez une date</option>
       {uniqueDates.map(date => (
-        <option key={date} value={date}>{date}</option>
+        <option key={date} value={date}>
+          {formatDate(date)}
+        </option>
       ))}
     </select>
   );
@@ -833,7 +862,7 @@ const CSVViewer: React.FC = () => {
           "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
         ) : draggedTask.task[2] !== selectedDate ? (
           <span className="text-red-600">
-            Impossible de déplacer une tâche en dehors de sa période ({draggedTask.task[2]})
+            Impossible de déplacer une tâche en dehors de sa période ({formatDate(draggedTask.task[2])})
           </span>
         ) : (
           "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
@@ -843,7 +872,7 @@ const CSVViewer: React.FC = () => {
   };
 
   // ... Suite dans la partie 6
-// Rendu du Gantt Chart
+  // Rendu du Gantt Chart
   const renderGanttChart = (groupBy: string): React.ReactNode => {
     if (!selectedDate) {
       return <p>Veuillez sélectionner une date</p>;
@@ -1068,7 +1097,7 @@ const CSVViewer: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4">
               {selectedTask 
                 ? "Détails de l'opération sélectionnée"
-                : `Détails des opérations pour le ${selectedDate}`}
+                : `Détails des opérations pour le ${formatDate(selectedDate)}`}
             </h3>
             {renderTable(filterDataForDate(selectedDate, selectedTask))}
           </div>
