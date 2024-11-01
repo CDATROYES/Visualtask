@@ -445,7 +445,7 @@ const CSVViewer: React.FC = () => {
   });
 
   // ... Suite dans la partie 4
-  // Gestion du drag & drop
+// Gestion du drag & drop
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
     const taskData: DraggedTaskData = {
@@ -506,6 +506,22 @@ const CSVViewer: React.FC = () => {
     setDraggedTask(null);
     setDropZoneActive(null);
   }, []);
+
+  // Fonction utilitaire pour générer la plage de dates
+  const generateDateRange = (start: Date, end: Date): string[] => {
+    const dates: string[] = [];
+    const current = new Date(start);
+    current.setHours(0, 0, 0, 0);
+    const endDate = new Date(end);
+    endDate.setHours(23, 59, 59, 999);
+    
+    while (current <= endDate) {
+      dates.push(new Date(current).toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
+    }
+    
+    return dates;
+  };
 
   const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
     setData(prevData => {
@@ -601,7 +617,7 @@ const CSVViewer: React.FC = () => {
         setData(processedData);
         setHeaders(results.data[0]);
 
-        // Trouver dates min et max
+        // Trouver les dates min et max
         let minDate: Date | null = null;
         let maxDate: Date | null = null;
 
@@ -616,18 +632,10 @@ const CSVViewer: React.FC = () => {
         });
 
         // Générer toutes les dates de la période
-        const allDates: string[] = [];
         if (minDate && maxDate) {
-          const currentDate = new Date(minDate);
-          while (currentDate <= maxDate) {
-            allDates.push(currentDate.toISOString().split('T')[0]);
-            currentDate.setDate(currentDate.getDate() + 1);
-          }
+          const allDates = generateDateRange(minDate, maxDate);
+          setUniqueDates(allDates);
         }
-
-        // Tri des dates
-        const sortedDates = allDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-        setUniqueDates(sortedDates);
 
         const technicianSet = new Set<string>();
         processedData.forEach((row: string[]) => {
@@ -657,6 +665,8 @@ const CSVViewer: React.FC = () => {
       }
     });
   };
+
+  // ... Suite dans la partie 5
 
   // ... Suite dans la partie 5
   // Composants de rendu de base
