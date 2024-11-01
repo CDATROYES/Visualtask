@@ -236,7 +236,7 @@ const CSVViewer: React.FC = () => {
   }, []);
 
   // ... Suite dans la partie 3
-  // Fonctions de gestion des données
+// Fonctions de gestion des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -386,9 +386,21 @@ const CSVViewer: React.FC = () => {
   const assignDateToTask = (task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
     updatedTask[2] = targetDate;    // Date de début
-    updatedTask[3] = '08:00';       // Heure de début à 8h00
-    updatedTask[4] = targetDate;    // Date de fin
-    updatedTask[5] = '09:00';       // Heure de fin à 9h00 (1h après)
+    
+    // Vérifier si la tâche a déjà des heures définies
+    const hasTime = Boolean(task[3] && task[5]);
+    if (hasTime) {
+      // Conserver les heures existantes
+      updatedTask[3] = task[3];    // Garder l'heure de début existante
+      updatedTask[4] = targetDate;  // Nouvelle date de fin
+      updatedTask[5] = task[5];    // Garder l'heure de fin existante
+    } else {
+      // Utiliser les heures par défaut uniquement si aucune heure n'est définie
+      updatedTask[3] = '08:00';    // Heure de début par défaut
+      updatedTask[4] = targetDate;  // Date de fin
+      updatedTask[5] = '09:00';    // Heure de fin par défaut
+    }
+    
     return updatedTask;
   };
 
