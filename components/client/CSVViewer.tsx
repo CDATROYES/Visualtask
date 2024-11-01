@@ -831,7 +831,7 @@ const CSVViewer: React.FC = () => {
   };
 
   // ... Suite dans la partie 6
-  // Rendu du Gantt Chart
+// Rendu du Gantt Chart
   const renderGanttChart = (groupBy: string): React.ReactNode => {
     if (!selectedDate) {
       return <p>Veuillez sélectionner une date</p>;
@@ -854,30 +854,23 @@ const CSVViewer: React.FC = () => {
     const groupedData: GanttChartData[] = groups.map(group => {
       let tasks: TaskData[];
       
-	if (group === "Non affectées") {
-	tasks = unassignedTasks.map(task => {
-		// Vérifier si la tâche a des heures de début et fin
-		const hasTime = Boolean(task[3] && task[5]);
-    
-		return {
-		task,
-		// Si la tâche a des heures, utiliser ces heures, sinon utiliser 8h par défaut
-		startPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
-		duration: hasTime 
-			? calculateDuration(task[3], task[5]) 
-			: 4.17,
-		operationId: getOperationId(task),
-		isMultiDay: false,
-		isStart: true,
-		isEnd: true,
-		isUnassigned: true,
-		dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
-		dayEndPercentage: hasTime 
-			? getTimePercentage(task[5]) 
-			: 37.50
-		};
-	});
-	}	
+      if (group === "Non affectées") {
+        tasks = unassignedTasks.map(task => {
+          const hasTime = Boolean(task[3] && task[5]);
+          
+          return {
+            task,
+            startPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+            duration: hasTime ? calculateDuration(task[3], task[5]) : 4.17,
+            operationId: getOperationId(task),
+            isMultiDay: false,
+            isStart: true,
+            isEnd: true,
+            isUnassigned: true,
+            dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+            dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.50
+          };
+        });
       } else {
         tasks = filteredDataForDate
           .filter(row => row && row[groupIndex] === group)
@@ -887,7 +880,6 @@ const CSVViewer: React.FC = () => {
             const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
             const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
 
-            // Calcul des pourcentages pour cette journée
             const { dayStartPercentage, dayEndPercentage } = calculateDayPercentages(task, selectedDate);
 
             return {
@@ -962,8 +954,6 @@ const CSVViewer: React.FC = () => {
               >
                 {tasks.map((taskData) => {
                   const verticalPosition = overlaps.get(taskData.operationId) || 0;
-                  
-                  // Utilisation des pourcentages de la journée pour le positionnement
                   const displayStartPercentage = taskData.dayStartPercentage ?? taskData.startPercentage;
                   const displayEndPercentage = taskData.dayEndPercentage ?? (taskData.startPercentage + taskData.duration);
                   const displayWidth = displayEndPercentage - displayStartPercentage;
