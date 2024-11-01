@@ -854,19 +854,30 @@ const CSVViewer: React.FC = () => {
     const groupedData: GanttChartData[] = groups.map(group => {
       let tasks: TaskData[];
       
-      if (group === "Non affectées") {
-        tasks = unassignedTasks.map(task => ({
-          task,
-          startPercentage: 33.33, // 8:00 par défaut
-          duration: 4.17,         // 1 heure par défaut
-          operationId: getOperationId(task),
-          isMultiDay: false,
-          isStart: true,
-          isEnd: true,
-          isUnassigned: true,
-          dayStartPercentage: 33.33,
-          dayEndPercentage: 37.50
-        }));
+	if (group === "Non affectées") {
+	tasks = unassignedTasks.map(task => {
+		// Vérifier si la tâche a des heures de début et fin
+		const hasTime = Boolean(task[3] && task[5]);
+    
+		return {
+		task,
+		// Si la tâche a des heures, utiliser ces heures, sinon utiliser 8h par défaut
+		startPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+		duration: hasTime 
+			? calculateDuration(task[3], task[5]) 
+			: 4.17,
+		operationId: getOperationId(task),
+		isMultiDay: false,
+		isStart: true,
+		isEnd: true,
+		isUnassigned: true,
+		dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+		dayEndPercentage: hasTime 
+			? getTimePercentage(task[5]) 
+			: 37.50
+		};
+	});
+	}	
       } else {
         tasks = filteredDataForDate
           .filter(row => row && row[groupIndex] === group)
