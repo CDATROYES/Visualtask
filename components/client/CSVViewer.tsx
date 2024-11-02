@@ -1159,7 +1159,8 @@ const CSVViewer: React.FC = () => {
   };
 
   // ... Suite dans la partie 7
- const renderTable = (dataToRender: string[][]): React.ReactNode => {
+ // Rendu du tableau principal
+  const renderTable = (dataToRender: string[][]): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
     return (
@@ -1245,6 +1246,7 @@ const CSVViewer: React.FC = () => {
     );
   };
 
+  // Modal de création d'une nouvelle opération
   const renderCreateModal = (): React.ReactNode => {
     if (!isCreateModalOpen) return null;
 
@@ -1283,10 +1285,17 @@ const CSVViewer: React.FC = () => {
                   <label className="text-sm text-gray-600 mb-1">
                     {header}
                   </label>
+                  
                   {header.toLowerCase().includes('date') ? (
-                    <input type="date" {...inputProps} />
+                    <input 
+                      type="date" 
+                      {...inputProps} 
+                    />
                   ) : header.toLowerCase().includes('heure') ? (
-                    <input type="time" {...inputProps} />
+                    <input 
+                      type="time" 
+                      {...inputProps}
+                    />
                   ) : header === headers[15] ? (
                     <select {...inputProps}>
                       <option value="">Sélectionner un technicien</option>
@@ -1297,7 +1306,10 @@ const CSVViewer: React.FC = () => {
                       ))}
                     </select>
                   ) : (
-                    <input type="text" {...inputProps} />
+                    <input 
+                      type="text" 
+                      {...inputProps}
+                    />
                   )}
                 </div>
               );
@@ -1315,7 +1327,10 @@ const CSVViewer: React.FC = () => {
               Annuler
             </button>
             <button
-              onClick={() => handleCreateOperation()}
+              onClick={() => {
+                handleCreateOperation();
+                setIsCreateModalOpen(false);
+              }}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Créer
@@ -1326,10 +1341,18 @@ const CSVViewer: React.FC = () => {
     );
   };
 
+  // Fonction de création d'une nouvelle opération
+  const handleCreateOperation = (): void => {
+    const newRow = headers.map(header => newOperation[header] || '');
+    setData(prev => [...prev, newRow]);
+    setNewOperation({});
+  };
+
   // Rendu principal du composant
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
       <div className="mb-6 space-y-4">
+        {/* Section upload de fichier */}
         <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
           <input 
             type="file" 
@@ -1342,6 +1365,7 @@ const CSVViewer: React.FC = () => {
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
                      transition-colors duration-200 flex items-center gap-2"
           >
+            <Edit2 className="h-4 w-4" />
             Nouvelle opération
           </button>
           <button
@@ -1349,22 +1373,30 @@ const CSVViewer: React.FC = () => {
             className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
                      transition-colors duration-200 flex items-center gap-2"
           >
+            <Save className="h-4 w-4" />
             Exporter CSV
           </button>
         </div>
 
+        {/* Onglets */}
         {renderTabButtons()}
       </div>
 
+      {/* Contenu principal */}
       <Card>
-        <CardContent className="p-6">
+        <CardContent>
           {tabContent[activeTab].content}
         </CardContent>
       </Card>
 
+      {/* Modal de création d'opération */}
       {renderCreateModal()}
+
+      {/* Message drag and drop */}
+      {draggedTask && getDragMessage()}
     </div>
   );
 };
 
+// Export du composant
 export default React.memo(CSVViewer);
