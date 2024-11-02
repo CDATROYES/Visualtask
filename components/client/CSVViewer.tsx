@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X, Settings } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -92,9 +92,64 @@ const CSVViewer: React.FC = () => {
   const [editedData, setEditedData] = useState<Record<string, string>>({});
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
-  // Ajout des nouveaux états pour la fonctionnalité Nouvelle opération
+  // États pour la fonctionnalité Nouvelle opération
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newOperation, setNewOperation] = useState<Record<string, string>>({});
+
+  // useEffects
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F7') {
+        setIsFiltering(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (headers.length > 0 && columnVisibility.length === 0) {
+      const initialVisibility = headers.map((header, index) => ({
+        index,
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index),
+        name: header
+      }));
+      setColumnVisibility(initialVisibility);
+    }
+  }, [headers]);
+
+  // Fonctions utilitaires de base
+  const isSameDay = (date1: string, date2: string): boolean => {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+  };
+
+  const getOperationId = (task: string[]): string => {
+    return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
+  };
+
+  const getUniqueColor = (index: number): string => {
+    const hue = (index * 137.508) % 360;
+    return `hsl(${hue}, 70%, 50%)`;
+  };
+
+  // Fonctions de gestion du temps
+  const getTimePercentage = (time: string): number => {
+    if (!time) return 33.33; // 8:00 par défaut
+    try {
+      const [hours, minutes] = time.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes)) return 33.33;
+      return ((hours * 60 + minutes) / (24 * 60)) * 100;
+    } catch (err) {
+      console.error('Erreur lors du calcul du pourcentage de temps:', err);
+      return 33.33;
+    }
+  };
 
 // ... La suite dans la partie 2
 // useEffects
