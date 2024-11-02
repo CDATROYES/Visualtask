@@ -1059,6 +1059,29 @@ const CSVViewer: React.FC = () => {
     );
   };
   // Configuration des onglets et vues
+  const getDragMessage = (): React.ReactNode => {
+  if (!draggedTask) return null;
+
+  return (
+    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg text-sm italic space-y-1">
+      {draggedTask.startDate && draggedTask.endDate ? (
+        draggedTask.task[2] !== selectedDate ? (
+          <div className="text-red-600">
+            Impossible de déplacer une tâche en dehors de sa période
+          </div>
+        ) : (
+          <div>
+            Glissez la tâche sur une ligne pour réaffecter au technicien correspondant
+          </div>
+        )
+      ) : (
+        <div>
+          Glissez la tâche sur une ligne pour l&apos;affecter à la date sélectionnée
+        </div>
+      )}
+    </div>
+  );
+};
   const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
