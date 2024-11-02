@@ -112,7 +112,7 @@ const CSVViewer: React.FC = () => {
     return `hsl(${hue}, 70%, 50%)`;
   };
 
-  // Base useEffects
+  // useEffects
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F7') {
@@ -134,7 +134,8 @@ const CSVViewer: React.FC = () => {
       setColumnVisibility(initialVisibility);
     }
   }, [headers]);
-  //suite dans la partie 2
+  
+  //*********************************************************************************************************************suite dans la partie 2
   // Time management functions
   const getTimePercentage = (time: string): number => {
     if (!time) return 33.33; // Default to 8:00
@@ -160,6 +161,10 @@ const CSVViewer: React.FC = () => {
       return 4.17;
     }
   };
+
+  const handleTaskClick = useCallback((operationId: string): void => {
+    setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
+  }, []);
 
   const calculateDayPercentages = useCallback((
     task: string[], 
@@ -198,224 +203,10 @@ const CSVViewer: React.FC = () => {
     }
   }, []);
 
-  // File handling functions
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    parse(file, {
-      complete: (results: CSVResult) => {
-        const processedData = results.data.slice(1)
-          .filter((row: string[]) => row.some(cell => cell))
-          .map((row: string[]) => {
-            const updatedRow = [...row];
-            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
-
-            if (updatedRow[2] && updatedRow[4]) {
-              const startDate = new Date(updatedRow[2]);
-              const endDate = new Date(updatedRow[4]);
-              updatedRow[2] = startDate.toISOString().split('T')[0];
-              updatedRow[4] = endDate.toISOString().split('T')[0];
-            }
-            return updatedRow;
-          });
-
-        setData(processedData);
-        setHeaders(results.data[0]);
-
-        // Generate unique dates
-        const allDatesSet = new Set<string>();
-        const technicianSet = new Set<string>();
-
-        processedData.forEach((row: string[]) => {
-          if (row[2] && row[4]) {
-            const startDate = new Date(row[2]);
-            const endDate = new Date(row[4]);
-            
-            let currentDate = new Date(startDate);
-            while (currentDate <= endDate) {
-              allDatesSet.add(currentDate.toISOString().split('T')[0]);
-              currentDate.setDate(currentDate.getDate() + 1);
-            }
-          }
-          if (row[15]) {
-            technicianSet.add(row[15].trim());
-          }
-        });
-
-        const sortedDates = Array.from(allDatesSet).sort();
-        const sortedTechnicians = Array.from(technicianSet)
-          .filter(tech => tech && tech !== "Sans technicien")
-          .sort();
-
-        if (technicianSet.has("Sans technicien")) {
-          sortedTechnicians.push("Sans technicien");
-        }
-
-        setUniqueDates(sortedDates);
-        setAllTechnicians(sortedTechnicians);
-
-        // Initialize filters
-        const initialFilters: Record<string, string> = {};
-        results.data[0].forEach(header => {
-          initialFilters[header] = '';
-        });
-        setFilters(initialFilters);
-      },
-      error: (error: Error) => {
-        console.error('Error reading file:', error);
-      }
-    });
-  };
-
-  const handleExportCSV = (): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
-    });
-    
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
-  //suite dans la partie 3
-  // Task and data processing functions
-  const detectOverlaps = useCallback((tasks: TaskData[]): Map<string, number> => {
-    const sortedTasks = [...tasks].sort((a, b) => {
-      const aStart = a.dayStartPercentage ?? a.startPercentage;
-      const bStart = b.dayStartPercentage ?? b.startPercentage;
-      
-      if (aStart === bStart) {
-        const aEnd = a.dayEndPercentage ?? (a.startPercentage + a.duration);
-        const bEnd = b.dayEndPercentage ?? (b.startPercentage + b.duration);
-        return bEnd - aEnd;
-      }
-      return aStart - bStart;
-    });
-
-    const overlaps = new Map<string, number>();
-    const timeSlots = new Map<string, string>();
-
-    for (const task of sortedTasks) {
-      const currentId = getOperationId(task.task);
-      const start = task.dayStartPercentage ?? task.startPercentage;
-      const end = task.dayEndPercentage ?? (task.startPercentage + task.duration);
-
-      let level = 0;
-      let foundSlot = false;
-
-      while (!foundSlot) {
-        foundSlot = true;
-        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-          const timeKey = `${level}_${time}`;
-          if (timeSlots.has(timeKey)) {
-            foundSlot = false;
-            level++;
-            break;
-          }
-        }
-      }
-
-      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-        timeSlots.set(`${level}_${time}`, currentId);
-      }
-
-      overlaps.set(currentId, level);
-    }
-
-    return overlaps;
-  }, []);
-
-  const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
-    if (!dateStr || !data.length) return [];
-
-    try {
-      const dateObj = new Date(dateStr);
-      dateObj.setHours(0, 0, 0, 0);
-
-      let filteredByDate = data.filter((row: string[]) => {
-        if (operationId) {
-          return getOperationId(row) === operationId;
-        }
-
-        if (!row[2] || !row[4]) return false;
-
-        try {
-          const startDate = new Date(row[2]);
-          startDate.setHours(0, 0, 0, 0);
-          const endDate = new Date(row[4]);
-          endDate.setHours(23, 59, 59, 999);
-          return startDate <= dateObj && dateObj <= endDate;
-        } catch (err) {
-          console.error('Error filtering dates:', err);
-          return false;
-        }
-      });
-
-      return filteredByDate;
-    } catch (err) {
-      console.error('Error filtering data:', err);
-      return [];
-    }
-  }, [data]);
-
-  const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
-    let groupIndex: number;
-    let labelIndex: number;
-    let groups: string[] = [];
-    
-    const unassignedTasks = data
-      .filter(row => (!row[2] || !row[4]) && 
-              !filteredDataForDate.some(filterRow => 
-                getOperationId(filterRow) === getOperationId(row)
-              ));
-
-    switch (groupBy) {
-      case 'Véhicule':
-        groupIndex = 0;
-        labelIndex = 1;
-        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
-          .filter(Boolean)
-          .sort();
-        break;
-      case 'Lieu':
-        groupIndex = 10;
-        labelIndex = 1;
-        groups = Array.from(new Set(data.map(row => row[groupIndex])))
-          .filter(Boolean)
-          .sort();
-        break;
-      case 'Technicien':
-        groupIndex = 15;
-        labelIndex = 15;
-        groups = allTechnicians.filter(tech => tech !== "Sans technicien");
-        if (allTechnicians.includes("Sans technicien")) {
-          groups.push("Sans technicien");
-        }
-        break;
-      default:
-        return { groups: [], groupIndex: 0, labelIndex: 0, unassignedTasks: [] };
-    }
-
-    if (unassignedTasks.length > 0 && !groups.includes("Non affectées")) {
-      groups.push("Non affectées");
-    }
-
-    return { groups, groupIndex, labelIndex, unassignedTasks };
-  }, [allTechnicians, data]);
-
-  const assignDateToTask = (task: string[], targetDate: string): string[] => {
+  const assignDateToTask = useCallback((task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
     updatedTask[2] = targetDate;    
     
-    // Check if task already has defined times
     const hasTime = Boolean(task[3] && task[5]);
     if (hasTime) {
       updatedTask[3] = task[3];    // Keep existing start time
@@ -428,6 +219,51 @@ const CSVViewer: React.FC = () => {
     }
     
     return updatedTask;
+  }, []);
+
+  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+    setData(prevData => {
+      return prevData.map(row => {
+        if (getOperationId(row) === operationId) {
+          const newRow = [...row];
+          newRow[15] = newTechnician;
+          return newRow;
+        }
+        return row;
+      });
+    });
+  }, []);
+
+  const handleFilterChange = (header: string, value: string): void => {
+    setFilters(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  };
+
+  const handleColumnVisibilityChange = (columnIndex: number): void => {
+    setColumnVisibility(prev => 
+      prev.map(col => 
+        col.index === columnIndex 
+          ? { ...col, visible: !col.visible }
+          : col
+      )
+    );
+  };
+
+  const resetColumnVisibility = (): void => {
+    setColumnVisibility(prev => 
+      prev.map((col, index) => ({
+        ...col,
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
+      }))
+    );
+  };
+
+  const getVisibleColumns = (): number[] => {
+    return columnVisibility
+      .filter(col => col.visible)
+      .map(col => col.index);
   };
 
   // Filter memoization
@@ -440,8 +276,8 @@ const CSVViewer: React.FC = () => {
       })
     )
   , [data, headers, filters]);
- //suite dans la partie 4
- // Drag and Drop handlers
+//***********************************************************************************************suite dans la partie 3
+ // Data processing and event handlers
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
     const taskData: DraggedTaskData = {
@@ -553,69 +389,153 @@ const CSVViewer: React.FC = () => {
 
     setDropZoneActive(null);
     setDraggedTask(null);
-  }, [draggedTask, selectedDate, updateAssignment]);
+  }, [draggedTask, selectedDate, assignDateToTask, updateAssignment]);
 
-  // Data editing handlers
-  const handleInputChange = (header: string, value: string): void => {
-    setEditedData(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
-
-  const handleEditClick = (row: string[]): void => {
-    const operationId = getOperationId(row);
-    setEditingRow(operationId);
-    const rowData: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      rowData[header] = row[index] || '';
+  const detectOverlaps = useCallback((tasks: TaskData[]): Map<string, number> => {
+    const sortedTasks = [...tasks].sort((a, b) => {
+      const aStart = a.dayStartPercentage ?? a.startPercentage;
+      const bStart = b.dayStartPercentage ?? b.startPercentage;
+      
+      if (aStart === bStart) {
+        const aEnd = a.dayEndPercentage ?? (a.startPercentage + a.duration);
+        const bEnd = b.dayEndPercentage ?? (b.startPercentage + b.duration);
+        return bEnd - aEnd;
+      }
+      return aStart - bStart;
     });
-    setEditedData(rowData);
-  };
 
-  const handleCancelEdit = (): void => {
-    setEditingRow(null);
-    setEditedData({});
-  };
+    const overlaps = new Map<string, number>();
+    const timeSlots = new Map<string, string>();
 
-  const handleSaveEdit = (operationId: string): void => {
-    setData(prevData => 
-      prevData.map(row => getOperationId(row) === operationId 
-        ? headers.map(header => editedData[header] || '')
-        : row
-      )
-    );
-    setEditingRow(null);
-    setEditedData({});
-  };
+    for (const task of sortedTasks) {
+      const currentId = getOperationId(task.task);
+      const start = task.dayStartPercentage ?? task.startPercentage;
+      const end = task.dayEndPercentage ?? (task.startPercentage + task.duration);
 
-  // Column visibility handlers
-  const handleColumnVisibilityChange = (columnIndex: number): void => {
-    setColumnVisibility(prev => 
-      prev.map(col => 
-        col.index === columnIndex 
-          ? { ...col, visible: !col.visible }
-          : col
-      )
-    );
-  };
+      let level = 0;
+      let foundSlot = false;
 
-  const resetColumnVisibility = (): void => {
-    setColumnVisibility(prev => 
-      prev.map((col, index) => ({
-        ...col,
-        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
-      }))
-    );
-  };
+      while (!foundSlot) {
+        foundSlot = true;
+        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+          const timeKey = `${level}_${time}`;
+          if (timeSlots.has(timeKey)) {
+            foundSlot = false;
+            level++;
+            break;
+          }
+        }
+      }
 
-  const getVisibleColumns = (): number[] => {
-    return columnVisibility
-      .filter(col => col.visible)
-      .map(col => col.index);
+      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+        timeSlots.set(`${level}_${time}`, currentId);
+      }
+
+      overlaps.set(currentId, level);
+    }
+
+    return overlaps;
+  }, []);
+
+  const handleAddTechnician = (): void => {
+    const trimmedTechnician = newTechnician.trim();
+    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
+      setAllTechnicians(prev => {
+        if (prev.includes(trimmedTechnician)) {
+          return prev;
+        }
+        const technicians = prev.filter(tech => tech !== "Sans technicien");
+        technicians.push(trimmedTechnician);
+        technicians.sort((a, b) => a.localeCompare(b));
+        if (prev.includes("Sans technicien")) {
+          technicians.push("Sans technicien");
+        }
+        return technicians;
+      });
+      setNewTechnician('');
+    }
   };
-  //suite dans la partie 5
-// Render helper functions
+ //**********************************************************************************************suite dans la partie 4
+// Data filtering and file handling
+  const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
+    if (!dateStr || !data.length) return [];
+
+    try {
+      const dateObj = new Date(dateStr);
+      dateObj.setHours(0, 0, 0, 0);
+
+      let filteredByDate = data.filter((row: string[]) => {
+        if (operationId) {
+          return getOperationId(row) === operationId;
+        }
+
+        if (!row[2] || !row[4]) return false;
+
+        try {
+          const startDate = new Date(row[2]);
+          startDate.setHours(0, 0, 0, 0);
+          const endDate = new Date(row[4]);
+          endDate.setHours(23, 59, 59, 999);
+          return startDate <= dateObj && dateObj <= endDate;
+        } catch (err) {
+          console.error('Error filtering dates:', err);
+          return false;
+        }
+      });
+
+      return filteredByDate;
+    } catch (err) {
+      console.error('Error filtering data:', err);
+      return [];
+    }
+  }, [data]);
+
+  const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
+    let groupIndex: number;
+    let labelIndex: number;
+    let groups: string[] = [];
+    
+    const unassignedTasks = data
+      .filter(row => (!row[2] || !row[4]) && 
+              !filteredDataForDate.some(filterRow => 
+                getOperationId(filterRow) === getOperationId(row)
+              ));
+
+    switch (groupBy) {
+      case 'Véhicule':
+        groupIndex = 0;
+        labelIndex = 1;
+        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+          .filter(Boolean)
+          .sort();
+        break;
+      case 'Lieu':
+        groupIndex = 10;
+        labelIndex = 1;
+        groups = Array.from(new Set(data.map(row => row[groupIndex])))
+          .filter(Boolean)
+          .sort();
+        break;
+      case 'Technicien':
+        groupIndex = 15;
+        labelIndex = 15;
+        groups = allTechnicians.filter(tech => tech !== "Sans technicien");
+        if (allTechnicians.includes("Sans technicien")) {
+          groups.push("Sans technicien");
+        }
+        break;
+      default:
+        return { groups: [], groupIndex: 0, labelIndex: 0, unassignedTasks: [] };
+    }
+
+    if (unassignedTasks.length > 0 && !groups.includes("Non affectées")) {
+      groups.push("Non affectées");
+    }
+
+    return { groups, groupIndex, labelIndex, unassignedTasks };
+  }, [allTechnicians, data]);
+
+  // Render helper components
   const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
     const isEditing = editingRow === operationId;
@@ -721,6 +641,94 @@ const CSVViewer: React.FC = () => {
     }
     return task[labelIndex] || 'N/A';
   };
+//*******************************************************************************************************************************suite dans la partie 5
+// File handling and UI components
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    parse(file, {
+      complete: (results: CSVResult) => {
+        const processedData = results.data.slice(1)
+          .filter((row: string[]) => row.some(cell => cell))
+          .map((row: string[]) => {
+            const updatedRow = [...row];
+            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
+
+            if (updatedRow[2] && updatedRow[4]) {
+              const startDate = new Date(updatedRow[2]);
+              const endDate = new Date(updatedRow[4]);
+              updatedRow[2] = startDate.toISOString().split('T')[0];
+              updatedRow[4] = endDate.toISOString().split('T')[0];
+            }
+            return updatedRow;
+          });
+
+        setData(processedData);
+        setHeaders(results.data[0]);
+
+        // Generate unique dates
+        const allDatesSet = new Set<string>();
+        const technicianSet = new Set<string>();
+
+        processedData.forEach((row: string[]) => {
+          if (row[2] && row[4]) {
+            const startDate = new Date(row[2]);
+            const endDate = new Date(row[4]);
+            
+            let currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+              allDatesSet.add(currentDate.toISOString().split('T')[0]);
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+          }
+          if (row[15]) {
+            technicianSet.add(row[15].trim());
+          }
+        });
+
+        const sortedDates = Array.from(allDatesSet).sort();
+        const sortedTechnicians = Array.from(technicianSet)
+          .filter(tech => tech && tech !== "Sans technicien")
+          .sort();
+
+        if (technicianSet.has("Sans technicien")) {
+          sortedTechnicians.push("Sans technicien");
+        }
+
+        setUniqueDates(sortedDates);
+        setAllTechnicians(sortedTechnicians);
+
+        const initialFilters: Record<string, string> = {};
+        results.data[0].forEach(header => {
+          initialFilters[header] = '';
+        });
+        setFilters(initialFilters);
+      },
+      error: (error: Error) => {
+        console.error('Error reading file:', error);
+      }
+    });
+  };
+
+  const handleExportCSV = (): void => {
+    const dataToExport = isFiltering ? filteredData : data;
+    const csv = unparse({
+      fields: headers,
+      data: dataToExport
+    });
+    
+    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
 
   const renderDateSelector = (): React.ReactNode => (
     <select 
@@ -792,6 +800,23 @@ const CSVViewer: React.FC = () => {
     </Card>
   );
 
+  const renderFilterReset = (): React.ReactNode => {
+    if (!selectedTask) return null;
+
+    return (
+      <div className="flex items-center justify-end mb-4">
+        <button
+          onClick={() => setSelectedTask(null)}
+          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
+                   transition-colors duration-200 flex items-center gap-2"
+        >
+          <X className="h-4 w-4" />
+          Réinitialiser le filtre
+        </button>
+      </div>
+    );
+  };
+
   const getDragMessage = (): React.ReactNode => {
     if (!draggedTask) return null;
 
@@ -811,8 +836,8 @@ const CSVViewer: React.FC = () => {
       </div>
     );
   };
-// suite dans la partie 6
-// Main render functions
+//*********************************************************************************************************************** suite dans la partie 6
+// Gantt Chart and Table Components
   const renderGanttChart = (groupBy: string): React.ReactNode => {
     if (!selectedDate) {
       return <p>Veuillez sélectionner une date</p>;
@@ -983,6 +1008,44 @@ const CSVViewer: React.FC = () => {
     );
   };
 
+  const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        {renderDateSelector()}
+        {showTechnicianInput && renderTechnicianInput()}
+      </div>
+
+      <div className="space-y-6">
+        <div className="relative bg-white rounded-lg shadow-sm">
+          {renderGanttChart(groupBy)}
+        </div>
+        
+        {draggedTask && getDragMessage()}
+        
+        <div className="text-sm text-gray-500 italic space-y-1">
+          {showTechnicianInput && (
+            <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
+          )}
+          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
+          <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
+        </div>
+
+        {selectedDate && (
+          <div className="mt-8 border-t-2 border-gray-200 pt-8">
+            {renderFilterReset()}
+            <h3 className="text-lg font-semibold mb-4">
+              {selectedTask 
+                ? "Détails de l'opération sélectionnée"
+                : `Détails des opérations pour le ${formatDate(selectedDate)}`}
+            </h3>
+            {renderTable(filterDataForDate(selectedDate, selectedTask))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+// ************************************************************************************************************************************suite dans la partie 7
+// Table render and configuration
   const renderTable = (dataToRender: string[][]): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
@@ -1035,70 +1098,76 @@ const CSVViewer: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {/* Table rows implementation */}
+              {dataToRender.map((row, rowIndex) => {
+                const operationId = getOperationId(row);
+                const isEditing = editingRow === operationId;
+                const isUnassigned = !row[2] || !row[4];
+
+                return (
+                  <tr
+                    key={operationId}
+                    className={`
+                      ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                      ${isEditing ? 'bg-yellow-50' : ''}
+                      ${isUnassigned ? 'bg-yellow-50' : ''}
+                      hover:bg-blue-50
+                    `}
+                  >
+                    {row.map((cell, cellIndex) => {
+                      if (!visibleColumns.includes(cellIndex)) return null;
+                      
+                      return (
+                        <td
+                          key={cellIndex}
+                          className="border border-gray-300 py-2 px-4 text-sm"
+                        >
+                          <div className="truncate">
+                            {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td className="border border-gray-300 py-2 px-4">
+                      <div className="flex justify-center gap-2">
+                        {isEditing ? (
+                          <>
+                            <button
+                              onClick={() => handleSaveEdit(operationId)}
+                              className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
+                              title="Enregistrer"
+                            >
+                              <Save className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleCancelEdit()}
+                              className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
+                              title="Annuler"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleEditClick(row)}
+                            className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
+                            title="Modifier"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
     );
   };
-// suite dans la partie 7
-const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        {renderDateSelector()}
-        {showTechnicianInput && renderTechnicianInput()}
-      </div>
 
-      <div className="space-y-6">
-        <div className="relative bg-white rounded-lg shadow-sm">
-          {renderGanttChart(groupBy)}
-        </div>
-        
-        {draggedTask && getDragMessage()}
-        
-        <div className="text-sm text-gray-500 italic space-y-1">
-          {showTechnicianInput && (
-            <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
-          )}
-          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
-          <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
-        </div>
-
-        {selectedDate && (
-          <div className="mt-8 border-t-2 border-gray-200 pt-8">
-            {renderFilterReset()}
-            <h3 className="text-lg font-semibold mb-4">
-              {selectedTask 
-                ? "Détails de l'opération sélectionnée"
-                : `Détails des opérations pour le ${formatDate(selectedDate)}`}
-            </h3>
-            {renderTable(filterDataForDate(selectedDate, selectedTask))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const handleAddTechnician = (): void => {
-    const trimmedTechnician = newTechnician.trim();
-    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
-      setAllTechnicians(prev => {
-        if (prev.includes(trimmedTechnician)) {
-          return prev;
-        }
-        const technicians = prev.filter(tech => tech !== "Sans technicien");
-        technicians.push(trimmedTechnician);
-        technicians.sort((a, b) => a.localeCompare(b));
-        if (prev.includes("Sans technicien")) {
-          technicians.push("Sans technicien");
-        }
-        return technicians;
-      });
-      setNewTechnician('');
-    }
-  };
-
+  // Tab configuration
   const tabContent = [
     { 
       title: 'Tableau', 
@@ -1143,23 +1212,6 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) 
     </div>
   );
 
-  const renderFilterReset = (): React.ReactNode => {
-    if (!selectedTask) return null;
-
-    return (
-      <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={() => setSelectedTask(null)}
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
-                   transition-colors duration-200 flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Réinitialiser le filtre
-        </button>
-      </div>
-    );
-  };
-
   // Final component render
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
@@ -1172,14 +1224,6 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) 
             accept=".csv" 
             className="flex-1"
           />
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-                     transition-colors duration-200 flex items-center gap-2"
-          >
-            <Edit2 className="h-4 w-4" />
-            Nouvelle opération
-          </button>
           <button
             onClick={handleExportCSV}
             className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
@@ -1206,19 +1250,4 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) 
   );
 };
 
-const updateAssignment = (operationId: string, newTechnician: string): void => {
-  setData(prevData => {
-    return prevData.map(row => {
-      if (getOperationId(row) === operationId) {
-        const newRow = [...row];
-        newRow[15] = newTechnician;
-        return newRow;
-      }
-      return row;
-    });
-  });
-};
-
-// Export with memo
-export default React.memo(CSVViewer);  
-  
+export default React.memo(CSVViewer);
