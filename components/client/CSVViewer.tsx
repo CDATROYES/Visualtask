@@ -232,40 +232,6 @@ const CSVViewer: React.FC = () => {
     )
   , [data, headers, filters]);
 
-  // Filtrage des données par date
-  const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
-    if (!dateStr || !data.length) return [];
-
-    try {
-      const dateObj = new Date(dateStr);
-      dateObj.setHours(0, 0, 0, 0);
-
-      let filteredByDate = data.filter((row: string[]) => {
-        if (operationId) {
-          return getOperationId(row) === operationId;
-        }
-
-        if (!row[2] || !row[4]) return false;
-
-        try {
-          const startDate = new Date(row[2]);
-          startDate.setHours(0, 0, 0, 0);
-          const endDate = new Date(row[4]);
-          endDate.setHours(23, 59, 59, 999);
-          return startDate <= dateObj && dateObj <= endDate;
-        } catch (err) {
-          console.error('Erreur lors du filtrage des dates:', err);
-          return false;
-        }
-      });
-
-      return filteredByDate;
-    } catch (err) {
-      console.error('Erreur lors du filtrage des données:', err);
-      return [];
-    }
-  }, [data]);
-
 // ... Suite dans la partie 3
 // Fonctions de gestion des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
@@ -300,17 +266,6 @@ const CSVViewer: React.FC = () => {
       return [];
     }
   }, [data]);
-
-  // Création de filteredData avec useMemo
-  const filteredData = useMemo(() => 
-    data.filter(row => 
-      headers.every((header, index) => {
-        const filterValue = (filters[header] || '').toLowerCase();
-        const cellValue = (row[index] || '').toString().toLowerCase();
-        return !filterValue || cellValue.includes(filterValue);
-      })
-    )
-  , [data, headers, filters]);
 
   const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
     let groupIndex: number;
@@ -357,110 +312,6 @@ const CSVViewer: React.FC = () => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
 
-  // Fonctions d'export CSV
-  const downloadCSV = (content: string, fileName: string): void => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
-
-  const handleExportCSV = useCallback((): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
-
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
-    });
-
-    downloadCSV(csv, fileName);
-  }, [data, filteredData, headers, isFiltering, selectedDate]);
-
-  // Fonctions d'édition
-  const handleInputChange = (header: string, value: string): void => {
-    setEditedData(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
-
-  const handleCreateOperation = (): void => {
-    const newRow = headers.map(header => {
-      if (header.toLowerCase().includes('technicien')) {
-        return newOperation[header] || 'Sans technicien';
-      }
-      return newOperation[header] || '';
-    });
-    
-    setData(prev => [...prev, newRow]);
-    setNewOperation({});
-    setIsCreateModalOpen(false);
-  };
-
-  const handleEditClick = (row: string[]): void => {
-    const operationId = getOperationId(row);
-    setEditingRow(operationId);
-    const rowData: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      rowData[header] = row[index] || '';
-    });
-    setEditedData(rowData);
-  };
-
-  const handleCancelEdit = (): void => {
-    setEditingRow(null);
-    setEditedData({});
-  };
-
-  const handleSaveEdit = (operationId: string): void => {
-    setData(prevData => 
-      prevData.map(row => getOperationId(row) === operationId 
-        ? headers.map(header => editedData[header] || '')
-        : row
-      )
-    );
-    setEditingRow(null);
-    setEditedData({});
-  };
-
-  // Fonctions de gestion des colonnes
-  const handleFilterChange = (header: string, value: string): void => {
-    setFilters(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
-
-  const handleColumnVisibilityChange = (columnIndex: number): void => {
-    setColumnVisibility(prev => 
-      prev.map(col => 
-        col.index === columnIndex 
-          ? { ...col, visible: !col.visible }
-          : col
-      )
-    );
-  };
-
-  const getVisibleColumns = (): number[] => {
-    return columnVisibility
-      .filter(col => col.visible)
-      .map(col => col.index);
-  };
-
-  const resetColumnVisibility = (): void => {
-    setColumnVisibility(prev => 
-      prev.map((col, index) => ({
-        ...col,
-        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
-      }))
-    );
-  };
 
 // ... Suite dans la partie 4
 // Fonction modifiée pour l'assignation de date
