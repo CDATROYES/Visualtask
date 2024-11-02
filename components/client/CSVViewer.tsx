@@ -667,91 +667,6 @@ const CSVViewer: React.FC = () => {
     </div>
   );
 
-  // Nouveau composant pour le modal de création d'opération
-  const renderCreateModal = (): React.ReactNode => {
-    if (!isCreateModalOpen) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-semibold">Créer une nouvelle opération</h2>
-            <button
-              onClick={() => {
-                setNewOperation({});
-                setIsCreateModalOpen(false);
-              }}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            {headers.map((header, index) => {
-              if (!getVisibleColumns().includes(index)) return null;
-
-              const inputProps = {
-                value: newOperation[header] || '',
-                onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => 
-                  setNewOperation(prev => ({
-                    ...prev,
-                    [header]: e.target.value
-                  })),
-                className: "w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              };
-
-              let inputElement;
-              if (header.toLowerCase().includes('date')) {
-                inputElement = <input type="date" {...inputProps} />;
-              } else if (header.toLowerCase().includes('heure')) {
-                inputElement = <input type="time" {...inputProps} />;
-              } else if (header === headers[15]) { // Champ technicien
-                inputElement = (
-                  <select {...inputProps}>
-                    <option value="">Sélectionner un technicien</option>
-                    {allTechnicians.map(tech => (
-                      <option key={tech} value={tech}>{tech}</option>
-                    ))}
-                  </select>
-                );
-              } else {
-                inputElement = <input type="text" {...inputProps} />;
-              }
-
-              return (
-                <div key={header} className="flex flex-col">
-                  <label className="text-sm text-gray-600 mb-1">
-                    {header}
-                  </label>
-                  {inputElement}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex justify-end gap-2 mt-6">
-            <button
-              onClick={() => {
-                setNewOperation({});
-                setIsCreateModalOpen(false);
-              }}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={handleCreateOperation}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-              Créer
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
     if (!task) return null;
     
@@ -778,8 +693,180 @@ const CSVViewer: React.FC = () => {
     return task[labelIndex] || 'N/A';
   };
 
+  // Ajout de la définition de renderGanttChart ici, avant son utilisation
+  const renderGanttChart = (groupBy: string): React.ReactNode => {
+    if (!selectedDate) {
+      return <p>Veuillez sélectionner une date</p>;
+    }
+
+    const BASE_ROW_HEIGHT = 60;
+    const HEADER_HEIGHT = 40;
+    const TASK_HEIGHT = 20;
+    const TASK_MARGIN = 4;
+    const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
+
+    const filteredDataForDate = filterDataForDate(selectedDate);
+    const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = 
+      groupDataByType(groupBy, filteredDataForDate) || {};
+
+    if (!groups.length && !unassignedTasks.length && groupBy !== 'Technicien') {
+      return <p>Aucune donnée à afficher pour cette date</p>;
+    }
+
+    const groupedData: GanttChartData[] = groups.map(group => {
+      let tasks: TaskData[];
+      
+      if (group === "Non affectées") {
+        tasks = unassignedTasks.map(task => {
+          const hasTime = Boolean(task[3] && task[5]);
+          
+          return {
+            task,
+            startPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+            duration: hasTime ? calculateDuration(task[3], task[5]) : 4.17,
+            operationId: getOperationId(task),
+            isMultiDay: false,
+            isStart: true,
+            isEnd: true,
+            isUnassigned: true,
+            dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+            dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.50
+          };
+        });
+      } else {
+        tasks = filteredDataForDate
+          .filter(row => row && row[groupIndex] === group)
+          .map(task => {
+            const hasStartAndEnd = Boolean(task[2] && task[4]);
+            const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
+            const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
+            const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
+
+            const { dayStartPercentage, dayEndPercentage } = calculateDayPercentages(task, selectedDate);
+
+            return {
+              task,
+              startPercentage: getTimePercentage(task[3]),
+              duration: calculateDuration(task[3], task[5]),
+              operationId: getOperationId(task),
+              isMultiDay,
+              isStart,
+              isEnd,
+              isUnassigned: false,
+              dayStartPercentage,
+              dayEndPercentage
+            };
+          });
+      }
+
+      const overlaps = detectOverlaps(tasks);
+      const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
+      const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
+
+      return {
+        group,
+        tasks,
+        overlaps,
+        rowHeight,
+        isUnassignedGroup: group === "Non affectées"
+      };
+    });
+
+    return (
+      <div className="overflow-x-auto">
+        <div className="min-w-[1000px]">
+          <div className="sticky top-0 z-10 flex">
+            <div className="w-48 bg-gray-100 border-r border-gray-300">
+              <div className="h-10 flex items-center px-4 font-semibold border-b border-gray-300">
+                {groupBy}
+              </div>
+            </div>
+            <div className="flex-1">
+              {renderTimeHeader({ HEADER_HEIGHT })}
+            </div>
+          </div>
+
+          {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
+            <div key={group} className="flex">
+              <div 
+                className={`
+                  w-48 px-4 border-r border-gray-300 flex items-center
+                  ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                `}
+                style={{ height: `${rowHeight}px` }}
+              >
+                <span className="truncate font-medium">
+                  {group || 'N/A'}
+                </span>
+              </div>
+
+              <div 
+                className={`
+                  relative flex-1 border-b border-gray-300
+                  ${dropZoneActive === group ? 'bg-blue-50' : 
+                    isUnassignedGroup ? 'bg-yellow-50' : 
+                    index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                `}
+                style={{ height: `${rowHeight}px` }}
+                onDragOver={handleDragOver}
+                onDragEnter={(e) => handleDragEnter(e, group)}
+                onDragLeave={(e) => handleDragLeave(e, group)}
+                onDrop={(e) => handleDrop(group, e)}
+              >
+                {tasks.map((taskData) => {
+                  const verticalPosition = overlaps.get(taskData.operationId) || 0;
+                  const displayStartPercentage = taskData.dayStartPercentage ?? taskData.startPercentage;
+                  const displayEndPercentage = taskData.dayEndPercentage ?? (taskData.startPercentage + taskData.duration);
+                  const displayWidth = displayEndPercentage - displayStartPercentage;
+
+                  return (
+                    <div
+                      key={`${taskData.operationId}_${selectedDate}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, taskData)}
+                      onDragEnd={handleDragEnd}
+                      onClick={() => handleTaskClick(taskData.operationId)}
+                      style={{
+                        position: 'absolute',
+                        left: `${displayStartPercentage}%`,
+                        width: `${displayWidth}%`,
+                        height: `${TASK_HEIGHT}px`,
+                        top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+                        backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
+                      }}
+                      className={`
+                        rounded cursor-pointer px-1
+                        ${taskData.isUnassigned ? 'text-black' : 'text-white'}
+                        ${selectedTask === taskData.operationId ? 'ring-2 ring-yellow-400' : ''}
+                        ${taskData.isMultiDay ? 'border-2 border-blue-300' : ''}
+                        hover:brightness-90 transition-all duration-200
+                      `}
+                    >
+                      {renderGanttTaskContent({
+                        task: taskData.task,
+                        groupBy,
+                        labelIndex
+                      })}
+                    </div>
+                  );
+                })}
+
+                {tasks.length === 0 && groupBy === 'Technicien' && !isUnassignedGroup && (
+                  <div className="h-full w-full flex items-center justify-center text-gray-400 italic">
+                    Aucune tâche assignée
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
 // ... Suite dans la partie 6
-const renderDateSelector = (): React.ReactNode => (
+// Composants de rendu principaux
+  const renderDateSelector = (): React.ReactNode => (
     <select 
       value={selectedDate} 
       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
@@ -903,6 +990,90 @@ const renderDateSelector = (): React.ReactNode => (
         ) : (
           "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
         )}
+      </div>
+    );
+  };
+
+  const renderCreateModal = (): React.ReactNode => {
+    if (!isCreateModalOpen) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Créer une nouvelle opération</h2>
+            <button
+              onClick={() => {
+                setNewOperation({});
+                setIsCreateModalOpen(false);
+              }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {headers.map((header, index) => {
+              if (!getVisibleColumns().includes(index)) return null;
+
+              const inputProps = {
+                value: newOperation[header] || '',
+                onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => 
+                  setNewOperation(prev => ({
+                    ...prev,
+                    [header]: e.target.value
+                  })),
+                className: "w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              };
+
+              let inputElement;
+              if (header.toLowerCase().includes('date')) {
+                inputElement = <input type="date" {...inputProps} />;
+              } else if (header.toLowerCase().includes('heure')) {
+                inputElement = <input type="time" {...inputProps} />;
+              } else if (header === headers[15]) { // Champ technicien
+                inputElement = (
+                  <select {...inputProps}>
+                    <option value="">Sélectionner un technicien</option>
+                    {allTechnicians.map(tech => (
+                      <option key={tech} value={tech}>{tech}</option>
+                    ))}
+                  </select>
+                );
+              } else {
+                inputElement = <input type="text" {...inputProps} />;
+              }
+
+              return (
+                <div key={header} className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">
+                    {header}
+                  </label>
+                  {inputElement}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={() => {
+                setNewOperation({});
+                setIsCreateModalOpen(false);
+              }}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleCreateOperation}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            >
+              Créer
+            </button>
+          </div>
+        </div>
       </div>
     );
   };
