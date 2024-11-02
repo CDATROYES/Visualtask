@@ -92,6 +92,8 @@ const CSVViewer: React.FC = () => {
   const [editedData, setEditedData] = useState<Record<string, string>>({});
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [newOperation, setNewOperation] = useState<Record<string, string>>({});
 
   // ... Suite dans la partie 2
   // useEffects
@@ -446,6 +448,20 @@ const CSVViewer: React.FC = () => {
       return !filterValue || cellValue.includes(filterValue);
     });
   });
+
+	const handleCreateOperation = () => {
+  const newRow = headers.map(header => {
+    if (header.toLowerCase().includes('date')) {
+      return selectedDate || '';
+    }
+    return newOperation[header] || '';
+  });
+  
+  setData(prev => [...prev, newRow]);
+  setNewOperation({});
+  setIsCreateModalOpen(false);
+};
+
 
  
   // ... Suite dans la partie 4
@@ -885,6 +901,89 @@ const CSVViewer: React.FC = () => {
     );
   };
 
+	const renderCreateModal = (): React.ReactNode => {
+  if (!isCreateModalOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+        <h2 className="text-xl font-semibold mb-4">Créer une nouvelle opération</h2>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          {headers.map((header, index) => {
+            if (!getVisibleColumns().includes(index)) return null;
+
+            if (header.toLowerCase().includes('date')) {
+              return (
+                <div key={header} className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">{header}</label>
+                  <input
+                    type="date"
+                    value={newOperation[header] || ''}
+                    onChange={(e) => setNewOperation(prev => ({
+                      ...prev,
+                      [header]: e.target.value
+                    }))}
+                    className="p-2 border rounded"
+                  />
+                </div>
+              );
+            }
+
+            if (header.toLowerCase().includes('heure')) {
+              return (
+                <div key={header} className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">{header}</label>
+                  <input
+                    type="time"
+                    value={newOperation[header] || ''}
+                    onChange={(e) => setNewOperation(prev => ({
+                      ...prev,
+                      [header]: e.target.value
+                    }))}
+                    className="p-2 border rounded"
+                  />
+                </div>
+              );
+            }
+
+            return (
+              <div key={header} className="flex flex-col">
+                <label className="text-sm text-gray-600 mb-1">{header}</label>
+                <input
+                  type="text"
+                  value={newOperation[header] || ''}
+                  onChange={(e) => setNewOperation(prev => ({
+                    ...prev,
+                    [header]: e.target.value
+                  }))}
+                  className="p-2 border rounded"
+                />
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => setIsCreateModalOpen(false)}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleCreateOperation}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Créer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+
   // ... Suite dans la partie 6
   // Rendu du Gantt Chart
   const renderGanttChart = (groupBy: string): React.ReactNode => {
@@ -1060,7 +1159,118 @@ const CSVViewer: React.FC = () => {
   };
 
   // ... Suite dans la partie 7
-  // Rendu des vues principales et export CSV
+ // Rendu des vues principales et export CSV
+  const renderCreateModal = (): React.ReactNode => {
+    if (!isCreateModalOpen) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+          <h2 className="text-xl font-semibold mb-4">Créer une nouvelle opération</h2>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            {headers.map((header, index) => {
+              if (!getVisibleColumns().includes(index)) return null;
+
+              if (header.toLowerCase().includes('date')) {
+                return (
+                  <div key={header} className="flex flex-col">
+                    <label className="text-sm text-gray-600 mb-1">{header}</label>
+                    <input
+                      type="date"
+                      value={newOperation[header] || ''}
+                      onChange={(e) => setNewOperation(prev => ({
+                        ...prev,
+                        [header]: e.target.value
+                      }))}
+                      className="p-2 border rounded"
+                    />
+                  </div>
+                );
+              }
+
+              if (header.toLowerCase().includes('heure')) {
+                return (
+                  <div key={header} className="flex flex-col">
+                    <label className="text-sm text-gray-600 mb-1">{header}</label>
+                    <input
+                      type="time"
+                      value={newOperation[header] || ''}
+                      onChange={(e) => setNewOperation(prev => ({
+                        ...prev,
+                        [header]: e.target.value
+                      }))}
+                      className="p-2 border rounded"
+                    />
+                  </div>
+                );
+              }
+
+              if (header === headers[15]) { // Pour le champ technicien
+                return (
+                  <div key={header} className="flex flex-col">
+                    <label className="text-sm text-gray-600 mb-1">{header}</label>
+                    <select
+                      value={newOperation[header] || ''}
+                      onChange={(e) => setNewOperation(prev => ({
+                        ...prev,
+                        [header]: e.target.value
+                      }))}
+                      className="p-2 border rounded"
+                    >
+                      <option value="">Sélectionner un technicien</option>
+                      {allTechnicians.map(tech => (
+                        <option key={tech} value={tech}>{tech}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={header} className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">{header}</label>
+                  <input
+                    type="text"
+                    value={newOperation[header] || ''}
+                    onChange={(e) => setNewOperation(prev => ({
+                      ...prev,
+                      [header]: e.target.value
+                    }))}
+                    className="p-2 border rounded"
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setNewOperation({});
+                setIsCreateModalOpen(false);
+              }}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleCreateOperation}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Créer
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const handleCreateOperation = (): void => {
+    const newRow = headers.map(header => newOperation[header] || '');
+    setData(prev => [...prev, newRow]);
+    setNewOperation({});
+    setIsCreateModalOpen(false);
+  };
+
   const handleExportCSV = (): void => {
     const dataToExport = isFiltering ? filteredData : data;
     const csv = unparse({
@@ -1120,128 +1330,6 @@ const CSVViewer: React.FC = () => {
     </div>
   );
 
-  const renderTable = (dataToRender: string[][]): React.ReactNode => {
-    const visibleColumns = getVisibleColumns();
-    
-    return (
-      <div className="w-full">
-        <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
-          <h2 className="text-lg font-semibold">Vue Tableau</h2>
-          <button
-            onClick={handleExportCSV}
-            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
-                     transition-colors duration-200 flex items-center gap-2"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Exporter en CSV
-          </button>
-        </div>
-
-        <div className="w-full overflow-x-auto">
-          <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-            <thead>
-              <tr>
-                {headers.map((header, index) => {
-                  if (!visibleColumns.includes(index)) return null;
-                  
-                  return (
-                    <th
-                      key={index}
-                      className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="truncate">{header}</span>
-                        {isFiltering && (
-                          <input
-                            type="text"
-                            value={filters[header] || ''}
-                            onChange={(e) => handleFilterChange(header, e.target.value)}
-                            placeholder={`Filtrer ${header}`}
-                            className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
-                          />
-                        )}
-                      </div>
-                    </th>
-                  );
-                })}
-                <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white">
-              {dataToRender.map((row, rowIndex) => {
-                const operationId = getOperationId(row);
-                const isEditing = editingRow === operationId;
-                const isUnassigned = !row[2] || !row[4];
-
-                return (
-                  <tr
-                    key={operationId}
-                    className={`
-                      ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
-                      ${isEditing ? 'bg-yellow-50' : ''}
-                      ${isUnassigned ? 'bg-yellow-50' : ''}
-                      hover:bg-blue-50
-                    `}
-                  >
-                    {row.map((cell, cellIndex) => {
-                      if (!visibleColumns.includes(cellIndex)) return null;
-                      
-                      return (
-                        <td
-                          key={cellIndex}
-                          className="border border-gray-300 py-2 px-4 text-sm"
-                        >
-                          <div className="truncate">
-                            {renderCell(row, cell, headers[cellIndex], cellIndex)}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="border border-gray-300 py-2 px-4">
-                      <div className="flex justify-center gap-2">
-                        {isEditing ? (
-                          <>
-                            <button
-                              onClick={() => handleSaveEdit(operationId)}
-                              className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-                              title="Enregistrer"
-                            >
-                              <Save className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-                              title="Annuler"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handleEditClick(row)}
-                            className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-                            title="Modifier"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
-  // Configuration des onglets
   const tabContent = [
     { 
       title: 'Tableau', 
@@ -1278,6 +1366,13 @@ const CSVViewer: React.FC = () => {
             className="flex-1"
           />
           <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+                     transition-colors duration-200 flex items-center gap-2"
+          >
+            Nouvelle opération
+          </button>
+          <button
             onClick={handleExportCSV}
             className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
                      transition-colors duration-200 flex items-center gap-2"
@@ -1296,6 +1391,9 @@ const CSVViewer: React.FC = () => {
           {tabContent[activeTab].content}
         </CardContent>
       </Card>
+
+      {/* Modal de création d'opération */}
+      {renderCreateModal()}
     </div>
   );
 };
