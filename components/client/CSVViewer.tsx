@@ -151,158 +151,120 @@ const CSVViewer: React.FC = () => {
   }, [headers]);
 
   // ... Suite dans la partie 2
-// useEffects
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'F7') {
-        setIsFiltering(prev => !prev);
-      }
-    };
+// Gestionnaires d'événements de fichiers
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    parse(file, {
+      complete: (results: CSVResult) => {
+        const processedData = results.data.slice(1)
+          .filter((row: string[]) => row.some(cell => cell))
+          .map((row: string[]) => {
+            const updatedRow = [...row];
+            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
 
-  useEffect(() => {
-    if (headers.length > 0 && columnVisibility.length === 0) {
-      const initialVisibility = headers.map((header, index) => ({
-        index,
-        visible: [0,1,2,3,4,5,10,11,15,16].includes(index),
-        name: header
-      }));
-      setColumnVisibility(initialVisibility);
-    }
-  }, [headers]);
+            if (updatedRow[2] && updatedRow[4]) {
+              const startDate = new Date(updatedRow[2]);
+              const endDate = new Date(updatedRow[4]);
+              updatedRow[2] = startDate.toISOString().split('T')[0];
+              updatedRow[4] = endDate.toISOString().split('T')[0];
+            }
+            return updatedRow;
+          });
 
-  // Fonctions utilitaires de base
-  const isSameDay = (date1: string, date2: string): boolean => {
-    if (!date1 || !date2) return false;
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
-  };
+        setData(processedData);
+        setHeaders(results.data[0]);
 
-  const getOperationId = (task: string[]): string => {
-    return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
-  };
+        // Génération des dates uniques
+        const allDatesSet = new Set<string>();
+        const technicianSet = new Set<string>();
 
-  const getUniqueColor = (index: number): string => {
-    const hue = (index * 137.508) % 360;
-    return `hsl(${hue}, 70%, 50%)`;
-  };
-
-  // Fonctions de gestion du temps
-  const getTimePercentage = (time: string): number => {
-    if (!time) return 33.33; // 8:00 par défaut
-    try {
-      const [hours, minutes] = time.split(':').map(Number);
-      if (isNaN(hours) || isNaN(minutes)) return 33.33;
-      return ((hours * 60 + minutes) / (24 * 60)) * 100;
-    } catch (err) {
-      console.error('Erreur lors du calcul du pourcentage de temps:', err);
-      return 33.33;
-    }
-  };
-
-  const calculateDuration = (startTime: string, endTime: string): number => {
-    if (!startTime || !endTime) return 4.17; // ~1 heure par défaut
-
-    try {
-      const startPercentage = getTimePercentage(startTime);
-      const endPercentage = getTimePercentage(endTime);
-      
-      return endPercentage - startPercentage;
-    } catch (err) {
-      console.error('Erreur lors du calcul de la durée:', err);
-      return 4.17;
-    }
-  };
-
-  const calculateDayPercentages = useCallback((
-    task: string[], 
-    selectedDate: string
-  ): { dayStartPercentage: number; dayEndPercentage: number } => {
-    if (!task[2] || !task[4]) {
-      const hasTime = Boolean(task[3] && task[5]);
-      return { 
-        dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
-        dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.5
-      };
-    }
-    
-    if (isSameDay(task[2], task[4])) {
-      return {
-        dayStartPercentage: getTimePercentage(task[3]),
-        dayEndPercentage: getTimePercentage(task[5])
-      };
-    }
-    
-    if (isSameDay(selectedDate, task[2])) {
-      return {
-        dayStartPercentage: getTimePercentage(task[3]),
-        dayEndPercentage: 100
-      };
-    } else if (isSameDay(selectedDate, task[4])) {
-      return {
-        dayStartPercentage: 0,
-        dayEndPercentage: getTimePercentage(task[5])
-      };
-    } else {
-      return {
-        dayStartPercentage: 0,
-        dayEndPercentage: 100
-      };
-    }
-  }, []);
-
-  // Fonction de détection des chevauchements
-  const detectOverlaps = useCallback((tasks: TaskData[]): Map<string, number> => {
-    const sortedTasks = [...tasks].sort((a, b) => {
-      const aStart = a.dayStartPercentage ?? a.startPercentage;
-      const bStart = b.dayStartPercentage ?? b.startPercentage;
-      
-      if (aStart === bStart) {
-        const aEnd = a.dayEndPercentage ?? (a.startPercentage + a.duration);
-        const bEnd = b.dayEndPercentage ?? (b.startPercentage + b.duration);
-        return bEnd - aEnd;
-      }
-      return aStart - bStart;
-    });
-
-    const overlaps = new Map<string, number>();
-    const timeSlots = new Map<string, string>();
-
-    for (const task of sortedTasks) {
-      const currentId = getOperationId(task.task);
-      const start = task.dayStartPercentage ?? task.startPercentage;
-      const end = task.dayEndPercentage ?? (task.startPercentage + task.duration);
-
-      let level = 0;
-      let foundSlot = false;
-
-      while (!foundSlot) {
-        foundSlot = true;
-        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-          const timeKey = `${level}_${time}`;
-          if (timeSlots.has(timeKey)) {
-            foundSlot = false;
-            level++;
-            break;
+        processedData.forEach((row: string[]) => {
+          if (row[2] && row[4]) {
+            const startDate = new Date(row[2]);
+            const endDate = new Date(row[4]);
+            
+            let currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+              allDatesSet.add(currentDate.toISOString().split('T')[0]);
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
           }
+          if (row[15]) {
+            technicianSet.add(row[15].trim());
+          }
+        });
+
+        const sortedDates = Array.from(allDatesSet).sort();
+        const sortedTechnicians = Array.from(technicianSet)
+          .filter(tech => tech && tech !== "Sans technicien")
+          .sort();
+
+        if (technicianSet.has("Sans technicien")) {
+          sortedTechnicians.push("Sans technicien");
         }
-      }
 
-      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-        timeSlots.set(`${level}_${time}`, currentId);
-      }
+        setUniqueDates(sortedDates);
+        setAllTechnicians(sortedTechnicians);
 
-      overlaps.set(currentId, level);
+        // Initialisation des filtres
+        const initialFilters: Record<string, string> = {};
+        results.data[0].forEach(header => {
+          initialFilters[header] = '';
+        });
+        setFilters(initialFilters);
+      },
+      error: (error: Error) => {
+        console.error('Erreur lors de la lecture du fichier:', error);
+      }
+    });
+  };
+
+  // Filtrage des données basé sur useMemo
+  const filteredData = useMemo(() => 
+    data.filter(row => 
+      headers.every((header, index) => {
+        const filterValue = (filters[header] || '').toLowerCase();
+        const cellValue = (row[index] || '').toString().toLowerCase();
+        return !filterValue || cellValue.includes(filterValue);
+      })
+    )
+  , [data, headers, filters]);
+
+  // Filtrage des données par date
+  const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
+    if (!dateStr || !data.length) return [];
+
+    try {
+      const dateObj = new Date(dateStr);
+      dateObj.setHours(0, 0, 0, 0);
+
+      let filteredByDate = data.filter((row: string[]) => {
+        if (operationId) {
+          return getOperationId(row) === operationId;
+        }
+
+        if (!row[2] || !row[4]) return false;
+
+        try {
+          const startDate = new Date(row[2]);
+          startDate.setHours(0, 0, 0, 0);
+          const endDate = new Date(row[4]);
+          endDate.setHours(23, 59, 59, 999);
+          return startDate <= dateObj && dateObj <= endDate;
+        } catch (err) {
+          console.error('Erreur lors du filtrage des dates:', err);
+          return false;
+        }
+      });
+
+      return filteredByDate;
+    } catch (err) {
+      console.error('Erreur lors du filtrage des données:', err);
+      return [];
     }
-
-    return overlaps;
-  }, []);
+  }, [data]);
 
 // ... Suite dans la partie 3
 // Fonctions de gestion des données
