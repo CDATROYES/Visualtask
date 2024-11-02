@@ -247,7 +247,7 @@ const CSVViewer: React.FC = () => {
   }, []);
 
   // ... Suite dans la partie 3
-  // Fonctions de gestion des données
+ // Fonctions de gestion des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -296,14 +296,16 @@ const CSVViewer: React.FC = () => {
       case 'Véhicule':
         groupIndex = 0;
         labelIndex = 1;
-        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+        // Extraire tous les véhicules de toutes les données
+        groups = Array.from(new Set(data.map(row => row[groupIndex])))
           .filter(Boolean)
           .sort();
         break;
       case 'Lieu':
         groupIndex = 10;
         labelIndex = 1;
-        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
+        // Extraire tous les lieux de toutes les données
+        groups = Array.from(new Set(data.map(row => row[groupIndex])))
           .filter(Boolean)
           .sort();
         break;
@@ -443,6 +445,7 @@ const CSVViewer: React.FC = () => {
       return !filterValue || cellValue.includes(filterValue);
     });
   });
+
 
   // ... Suite dans la partie 4
 // Gestion du drag & drop
