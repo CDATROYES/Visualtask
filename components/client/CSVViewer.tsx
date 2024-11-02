@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
-import { Edit2, Save, X, Settings } from 'lucide-react';
+import { Edit2, Save, X, Settings, Plus } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 // Interfaces principales
@@ -92,9 +92,11 @@ const CSVViewer: React.FC = () => {
   const [editedData, setEditedData] = useState<Record<string, string>>({});
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  // Nouveaux états pour la création d'opération
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newOperation, setNewOperation] = useState<Record<string, string>>({});
 
+  // ... Suite dans la partie 2
   // ... Suite dans la partie 2
   // useEffects
   useEffect(() => {
