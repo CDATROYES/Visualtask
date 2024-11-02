@@ -296,15 +296,15 @@ const CSVViewer: React.FC = () => {
       case 'Véhicule':
         groupIndex = 0;
         labelIndex = 1;
-        // Extraire tous les véhicules de toutes les données
-        groups = Array.from(new Set(data.map(row => row[groupIndex])))
+        // Pour les véhicules, uniquement ceux utilisés à la date sélectionnée
+        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
           .filter(Boolean)
           .sort();
         break;
       case 'Lieu':
         groupIndex = 10;
         labelIndex = 1;
-        // Extraire tous les lieux de toutes les données
+        // Pour les lieux, tous les lieux existants
         groups = Array.from(new Set(data.map(row => row[groupIndex])))
           .filter(Boolean)
           .sort();
@@ -312,6 +312,7 @@ const CSVViewer: React.FC = () => {
       case 'Technicien':
         groupIndex = 15;
         labelIndex = 15;
+        // Pour les techniciens, utiliser la liste complète des techniciens
         groups = allTechnicians.filter(tech => tech !== "Sans technicien");
         if (allTechnicians.includes("Sans technicien")) {
           groups.push("Sans technicien");
@@ -446,7 +447,7 @@ const CSVViewer: React.FC = () => {
     });
   });
 
-
+ 
   // ... Suite dans la partie 4
 // Gestion du drag & drop
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
