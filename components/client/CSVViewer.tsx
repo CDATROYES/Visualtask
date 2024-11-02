@@ -285,30 +285,16 @@ const CSVViewer: React.FC = () => {
     }
   }, [data]);
 
-  // Fonctions d'export CSV
-  const downloadCSV = (content: string, fileName: string): void => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
-
-  const handleExportCSV = useCallback((): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
-
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
+  // Création de filteredData avec useMemo
+  const filteredData = useMemo(() => {
+    return data.filter(row => {
+      return headers.every((header, index) => {
+        const filterValue = (filters[header] || '').toLowerCase();
+        const cellValue = (row[index] || '').toString().toLowerCase();
+        return !filterValue || cellValue.includes(filterValue);
+      });
     });
-
-    downloadCSV(csv, fileName);
-  }, [data, filteredData, headers, isFiltering, selectedDate]);
+  }, [data, headers, filters]);
 
   const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
     let groupIndex: number;
@@ -354,6 +340,31 @@ const CSVViewer: React.FC = () => {
 
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
+
+  // Fonctions d'export CSV
+  const downloadCSV = (content: string, fileName: string): void => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = useCallback((): void => {
+    const dataToExport = isFiltering ? filteredData : data;
+    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
+
+    const csv = unparse({
+      fields: headers,
+      data: dataToExport
+    });
+
+    downloadCSV(csv, fileName);
+  }, [data, filteredData, headers, isFiltering, selectedDate]);
 
   // Fonctions d'édition
   const handleInputChange = (header: string, value: string): void => {
