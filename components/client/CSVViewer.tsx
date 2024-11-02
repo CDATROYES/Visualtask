@@ -443,6 +443,33 @@ const CSVViewer: React.FC = () => {
       return !filterValue || cellValue.includes(filterValue);
     });
   });
+  // Fonctions d'export
+const handleExportCSV = (): void => {
+  const dataToExport = isFiltering ? filteredData : data;
+  const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
+
+  // Crée le contenu CSV avec les en-têtes
+  const csv = unparse({
+    fields: headers,
+    data: dataToExport
+  });
+
+  // Crée un blob et le télécharge
+  downloadCSV(csv, fileName);
+};
+
+const downloadCSV = (content: string, fileName: string): void => {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+  
   // Gestion du drag & drop
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
