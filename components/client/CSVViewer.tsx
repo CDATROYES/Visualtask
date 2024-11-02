@@ -64,6 +64,47 @@ interface RenderProps {
   labelIndex: number;
 }
 
+// Fonction de formatage des dates définie hors du composant
+const formatDate = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  
+  return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
+};
+
+// Fonctions utilitaires de base
+const isSameDay = (date1: string, date2: string): boolean => {
+  if (!date1 || !date2) return false;
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth() === d2.getMonth() &&
+         d1.getDate() === d2.getDate();
+};
+
+const getOperationId = (task: string[]): string => {
+  return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
+};
+
+const getUniqueColor = (index: number): string => {
+  const hue = (index * 137.508) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+};
+
+const getTimePercentage = (time: string): number => {
+  if (!time) return 33.33; // 8:00 par défaut
+  try {
+    const [hours, minutes] = time.split(':').map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return 33.33;
+    return ((hours * 60 + minutes) / (24 * 60)) * 100;
+  } catch (err) {
+    console.error('Erreur lors du calcul du pourcentage de temps:', err);
+    return 33.33;
+  }
+};
+
 // Début du composant principal
 const CSVViewer: React.FC = () => {
   // États du composant
@@ -110,7 +151,6 @@ const CSVViewer: React.FC = () => {
   }, [headers]);
 
   // ... Suite dans la partie 2
-
 // useEffects
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
