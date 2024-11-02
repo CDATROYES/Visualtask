@@ -1082,6 +1082,59 @@ const CSVViewer: React.FC = () => {
     </div>
   );
 };
+  const renderFilterReset = (): React.ReactNode => {
+    if (!selectedTask) return null;
+
+    return (
+      <div className="flex items-center justify-end mb-4">
+        <button
+          onClick={() => setSelectedTask(null)}
+          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
+                   transition-colors duration-200 flex items-center gap-2"
+        >
+          <X className="h-4 w-4" />
+          Réinitialiser le filtre
+        </button>
+      </div>
+    );
+  };
+
+  const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        {renderDateSelector()}
+        {showTechnicianInput && renderTechnicianInput()}
+      </div>
+
+      <div className="space-y-6">
+        <div className="relative bg-white rounded-lg shadow-sm">
+          {renderGanttChart(groupBy)}
+        </div>
+        
+        {draggedTask && getDragMessage()}
+        
+        <div className="text-sm text-gray-500 italic space-y-1">
+          {showTechnicianInput && (
+            <div>Les tâches sans technicien sont affichées en rouge au bas du planning.</div>
+          )}
+          <div>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</div>
+          <div>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</div>
+        </div>
+
+        {selectedDate && (
+          <div className="mt-8 border-t-2 border-gray-200 pt-8">
+            {renderFilterReset()}
+            <h3 className="text-lg font-semibold mb-4">
+              {selectedTask 
+                ? "Détails de l&apos;opération sélectionnée"
+                : `Détails des opérations pour le ${selectedDate}`}
+            </h3>
+            {renderTable(filterDataForDate(selectedDate, selectedTask))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
   const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
