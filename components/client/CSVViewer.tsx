@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
-import { Edit2, Save, X, Settings, Plus } from 'lucide-react';
+import { Edit2, Save, X, Settings } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 
 // Interfaces principales
@@ -92,11 +92,9 @@ const CSVViewer: React.FC = () => {
   const [editedData, setEditedData] = useState<Record<string, string>>({});
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
-  // Nouveaux états pour la création d'opération
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newOperation, setNewOperation] = useState<Record<string, string>>({});
 
-  // ... Suite dans la partie 2
   // ... Suite dans la partie 2
   // useEffects
   useEffect(() => {
@@ -1161,102 +1159,164 @@ const CSVViewer: React.FC = () => {
   };
 
   // ... Suite dans la partie 7
- // Rendu des vues principales et export CSV
+ const renderTable = (dataToRender: string[][]): React.ReactNode => {
+    const visibleColumns = getVisibleColumns();
+    
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              {isFiltering && <th />}
+              {headers.map((header, index) => {
+                if (!visibleColumns.includes(index)) return null;
+                
+                return (
+                  <th
+                    key={header}
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    {header}
+                    {isFiltering && (
+                      <input
+                        type="text"
+                        value={filters[header] || ''}
+                        onChange={(e) => handleFilterChange(header, e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm 
+                                 focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                        placeholder={`Filtrer ${header}`}
+                      />
+                    )}
+                  </th>
+                );
+              })}
+              <th className="relative px-6 py-3">
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {dataToRender.map((row, rowIndex) => {
+              const operationId = getOperationId(row);
+              const isEditing = editingRow === operationId;
+              
+              return (
+                <tr key={rowIndex} className="hover:bg-gray-50">
+                  {row.map((cell, cellIndex) => {
+                    if (!visibleColumns.includes(cellIndex)) return null;
+                    
+                    return (
+                      <td key={cellIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                      </td>
+                    );
+                  })}
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    {isEditing ? (
+                      <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={() => handleSaveEdit(operationId)}
+                          className="text-green-600 hover:text-green-900"
+                        >
+                          <Save className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={handleCancelEdit}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleEditClick(row)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   const renderCreateModal = (): React.ReactNode => {
     if (!isCreateModalOpen) return null;
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-          <h2 className="text-xl font-semibold mb-4">Créer une nouvelle opération</h2>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            {headers.map((header, index) => {
-              if (!getVisibleColumns().includes(index)) return null;
-
-              if (header.toLowerCase().includes('date')) {
-                return (
-                  <div key={header} className="flex flex-col">
-                    <label className="text-sm text-gray-600 mb-1">{header}</label>
-                    <input
-                      type="date"
-                      value={newOperation[header] || ''}
-                      onChange={(e) => setNewOperation(prev => ({
-                        ...prev,
-                        [header]: e.target.value
-                      }))}
-                      className="p-2 border rounded"
-                    />
-                  </div>
-                );
-              }
-
-              if (header.toLowerCase().includes('heure')) {
-                return (
-                  <div key={header} className="flex flex-col">
-                    <label className="text-sm text-gray-600 mb-1">{header}</label>
-                    <input
-                      type="time"
-                      value={newOperation[header] || ''}
-                      onChange={(e) => setNewOperation(prev => ({
-                        ...prev,
-                        [header]: e.target.value
-                      }))}
-                      className="p-2 border rounded"
-                    />
-                  </div>
-                );
-              }
-
-              if (header === headers[15]) { // Pour le champ technicien
-                return (
-                  <div key={header} className="flex flex-col">
-                    <label className="text-sm text-gray-600 mb-1">{header}</label>
-                    <select
-                      value={newOperation[header] || ''}
-                      onChange={(e) => setNewOperation(prev => ({
-                        ...prev,
-                        [header]: e.target.value
-                      }))}
-                      className="p-2 border rounded"
-                    >
-                      <option value="">Sélectionner un technicien</option>
-                      {allTechnicians.map(tech => (
-                        <option key={tech} value={tech}>{tech}</option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={header} className="flex flex-col">
-                  <label className="text-sm text-gray-600 mb-1">{header}</label>
-                  <input
-                    type="text"
-                    value={newOperation[header] || ''}
-                    onChange={(e) => setNewOperation(prev => ({
-                      ...prev,
-                      [header]: e.target.value
-                    }))}
-                    className="p-2 border rounded"
-                  />
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Créer une nouvelle opération</h2>
             <button
               onClick={() => {
                 setNewOperation({});
                 setIsCreateModalOpen(false);
               }}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {headers.map((header, index) => {
+              if (!getVisibleColumns().includes(index)) return null;
+
+              const inputProps = {
+                value: newOperation[header] || '',
+                onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => 
+                  setNewOperation(prev => ({
+                    ...prev,
+                    [header]: e.target.value
+                  })),
+                className: "w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              };
+
+              return (
+                <div key={header} className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">
+                    {header}
+                  </label>
+                  {header.toLowerCase().includes('date') ? (
+                    <input type="date" {...inputProps} />
+                  ) : header.toLowerCase().includes('heure') ? (
+                    <input type="time" {...inputProps} />
+                  ) : header === headers[15] ? (
+                    <select {...inputProps}>
+                      <option value="">Sélectionner un technicien</option>
+                      {allTechnicians.map(tech => (
+                        <option key={tech} value={tech}>
+                          {tech}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input type="text" {...inputProps} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={() => {
+                setNewOperation({});
+                setIsCreateModalOpen(false);
+              }}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
             >
               Annuler
             </button>
             <button
-              onClick={handleCreateOperation}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              onClick={() => handleCreateOperation()}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Créer
             </button>
@@ -1266,100 +1326,10 @@ const CSVViewer: React.FC = () => {
     );
   };
 
-  const handleCreateOperation = (): void => {
-    const newRow = headers.map(header => newOperation[header] || '');
-    setData(prev => [...prev, newRow]);
-    setNewOperation({});
-    setIsCreateModalOpen(false);
-  };
-
-  const handleExportCSV = (): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
-    });
-    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
-    downloadCSV(csv, fileName);
-  };
-
-  const downloadCSV = (content: string, fileName: string): void => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
-
-  const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        {renderDateSelector()}
-        {showTechnicianInput && renderTechnicianInput()}
-      </div>
-
-      <div className="space-y-6">
-        <div className="relative bg-white rounded-lg shadow-sm">
-          {renderGanttChart(groupBy)}
-        </div>
-        
-        {draggedTask && getDragMessage()}
-        
-        <div className="text-sm text-gray-500 italic space-y-1">
-          {showTechnicianInput && (
-            <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
-          )}
-          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
-          <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
-        </div>
-
-        {selectedDate && (
-          <div className="mt-8 border-t-2 border-gray-200 pt-8">
-            {renderFilterReset()}
-            <h3 className="text-lg font-semibold mb-4">
-              {selectedTask 
-                ? "Détails de l'opération sélectionnée"
-                : `Détails des opérations pour le ${formatDate(selectedDate)}`}
-            </h3>
-            {renderTable(filterDataForDate(selectedDate, selectedTask))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const tabContent = [
-    { 
-      title: 'Tableau', 
-      content: renderTable(filteredData) 
-    },
-    {
-      title: 'Vue Véhicule',
-      content: renderGanttView('Véhicule')
-    },
-    {
-      title: 'Vue Lieu',
-      content: renderGanttView('Lieu')
-    },
-    {
-      title: 'Vue Technicien',
-      content: renderGanttView('Technicien', true)
-    },
-    {
-      title: 'Paramètres',
-      content: renderSettings()
-    }
-  ];
-
   // Rendu principal du composant
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
       <div className="mb-6 space-y-4">
-        {/* Section upload de fichier */}
         <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
           <input 
             type="file" 
@@ -1383,22 +1353,18 @@ const CSVViewer: React.FC = () => {
           </button>
         </div>
 
-        {/* Onglets */}
         {renderTabButtons()}
       </div>
 
-      {/* Contenu principal */}
       <Card>
-        <CardContent>
+        <CardContent className="p-6">
           {tabContent[activeTab].content}
         </CardContent>
       </Card>
 
-      {/* Modal de création d'opération */}
       {renderCreateModal()}
     </div>
   );
 };
 
-// Export du composant mémorisé
 export default React.memo(CSVViewer);
