@@ -285,6 +285,31 @@ const CSVViewer: React.FC = () => {
     }
   }, [data]);
 
+  // Fonctions d'export CSV
+  const downloadCSV = (content: string, fileName: string): void => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportCSV = useCallback((): void => {
+    const dataToExport = isFiltering ? filteredData : data;
+    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
+
+    const csv = unparse({
+      fields: headers,
+      data: dataToExport
+    });
+
+    downloadCSV(csv, fileName);
+  }, [data, filteredData, headers, isFiltering, selectedDate]);
+
   const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
     let groupIndex: number;
     let labelIndex: number;
@@ -338,7 +363,6 @@ const CSVViewer: React.FC = () => {
     }));
   };
 
-  // Ajout de la fonction de création d'opération
   const handleCreateOperation = (): void => {
     const newRow = headers.map(header => {
       if (header.toLowerCase().includes('technicien')) {
@@ -1265,7 +1289,7 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
       <div className="mb-6 space-y-4">
-        {/* Section upload de fichier et nouvelle opération */}
+        {/* Section upload de fichier */}
         <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
           <input 
             type="file" 
@@ -1286,7 +1310,6 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
             className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
                      transition-colors duration-200 flex items-center gap-2"
           >
-            <Save className="h-4 w-4" />
             Exporter CSV
           </button>
         </div>
