@@ -64,17 +64,6 @@ interface RenderProps {
   labelIndex: number;
 }
 
-// Fonction de formatage des dates
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-                'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  
-  return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
-};
-
-// Début du composant principal
 const CSVViewer: React.FC = () => {
   // États du composant
   const [data, setData] = useState<string[][]>([]);
@@ -92,8 +81,10 @@ const CSVViewer: React.FC = () => {
   const [editedData, setEditedData] = useState<Record<string, string>>({});
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibility[]>([]);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [newOperation, setNewOperation] = useState<Record<string, string>>({});
 
-  // ... Suite dans la partie 2
+  // ... Le reste du code suit
   // useEffects
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -168,10 +159,9 @@ const CSVViewer: React.FC = () => {
     selectedDate: string
   ): { dayStartPercentage: number; dayEndPercentage: number } => {
     if (!task[2] || !task[4]) {
-      const hasTime = Boolean(task[3] && task[5]);
       return { 
-        dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
-        dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.5
+        dayStartPercentage: 33.33,
+        dayEndPercentage: 37.5
       };
     }
     
@@ -245,9 +235,7 @@ const CSVViewer: React.FC = () => {
 
     return overlaps;
   }, []);
-
-  // ... Suite dans la partie 3
- // Fonctions de gestion des données
+  // Fonctions de gestion des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -296,7 +284,6 @@ const CSVViewer: React.FC = () => {
       case 'Véhicule':
         groupIndex = 0;
         labelIndex = 1;
-        // Pour les véhicules, uniquement ceux utilisés à la date sélectionnée
         groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
           .filter(Boolean)
           .sort();
@@ -304,7 +291,6 @@ const CSVViewer: React.FC = () => {
       case 'Lieu':
         groupIndex = 10;
         labelIndex = 1;
-        // Pour les lieux, tous les lieux existants
         groups = Array.from(new Set(data.map(row => row[groupIndex])))
           .filter(Boolean)
           .sort();
@@ -312,7 +298,6 @@ const CSVViewer: React.FC = () => {
       case 'Technicien':
         groupIndex = 15;
         labelIndex = 15;
-        // Pour les techniciens, utiliser la liste complète des techniciens
         groups = allTechnicians.filter(tech => tech !== "Sans technicien");
         if (allTechnicians.includes("Sans technicien")) {
           groups.push("Sans technicien");
@@ -363,7 +348,21 @@ const CSVViewer: React.FC = () => {
     setEditedData({});
   };
 
-  // Fonctions de gestion des colonnes
+  // Création d'une nouvelle opération
+  const handleCreateOperation = (): void => {
+    const newRow = headers.map(header => {
+      if (header.toLowerCase().includes('technicien')) {
+        return newOperation[header] || 'Sans technicien';
+      }
+      return newOperation[header] || '';
+    });
+    
+    setData(prev => [...prev, newRow]);
+    setNewOperation({});
+    setIsCreateModalOpen(false);
+  };
+
+  // Fonctions de filtrage
   const handleFilterChange = (header: string, value: string): void => {
     setFilters(prev => ({
       ...prev,
@@ -371,6 +370,7 @@ const CSVViewer: React.FC = () => {
     }));
   };
 
+  // Gestion des colonnes
   const handleColumnVisibilityChange = (columnIndex: number): void => {
     setColumnVisibility(prev => 
       prev.map(col => 
@@ -396,23 +396,20 @@ const CSVViewer: React.FC = () => {
     );
   };
 
-  // Fonction modifiée pour l'assignation de date
+  // Assignation de date
   const assignDateToTask = (task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
-    updatedTask[2] = targetDate;    // Date de début
+    updatedTask[2] = targetDate;
     
-    // Vérifier si la tâche a déjà des heures définies
     const hasTime = Boolean(task[3] && task[5]);
     if (hasTime) {
-      // Conserver les heures existantes
-      updatedTask[3] = task[3];    // Garder l'heure de début existante
-      updatedTask[4] = targetDate;  // Nouvelle date de fin
-      updatedTask[5] = task[5];    // Garder l'heure de fin existante
+      updatedTask[3] = task[3];
+      updatedTask[4] = targetDate;
+      updatedTask[5] = task[5];
     } else {
-      // Utiliser les heures par défaut uniquement si aucune heure n'est définie
-      updatedTask[3] = '08:00';    // Heure de début par défaut
-      updatedTask[4] = targetDate;  // Date de fin
-      updatedTask[5] = '09:00';    // Heure de fin par défaut
+      updatedTask[3] = '08:00';
+      updatedTask[4] = targetDate;
+      updatedTask[5] = '09:00';
     }
     
     return updatedTask;
@@ -438,7 +435,7 @@ const CSVViewer: React.FC = () => {
     }
   };
 
-  // Gestion des données filtrées
+  // Filtrage des données
   const filteredData = data.filter(row => {
     return headers.every((header, index) => {
       const filterValue = (filters[header] || '').toLowerCase();
@@ -446,10 +443,7 @@ const CSVViewer: React.FC = () => {
       return !filterValue || cellValue.includes(filterValue);
     });
   });
-
- 
-  // ... Suite dans la partie 4
-// Gestion du drag & drop
+  // Gestion du drag & drop
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
     const taskData: DraggedTaskData = {
@@ -510,22 +504,6 @@ const CSVViewer: React.FC = () => {
     setDraggedTask(null);
     setDropZoneActive(null);
   }, []);
-
-  // Fonction utilitaire pour générer la plage de dates
-  const generateDateRange = (start: Date, end: Date): string[] => {
-    const dates: string[] = [];
-    const current = new Date(start);
-    current.setHours(0, 0, 0, 0);
-    const endDate = new Date(end);
-    endDate.setHours(23, 59, 59, 999);
-    
-    while (current <= endDate) {
-      dates.push(new Date(current).toISOString().split('T')[0]);
-      current.setDate(current.getDate() + 1);
-    }
-    
-    return dates;
-  };
 
   const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
     setData(prevData => {
@@ -596,7 +574,7 @@ const CSVViewer: React.FC = () => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
 
-  // Gestion des fichiers CSV avec génération de toutes les dates
+  // Gestion des fichiers CSV
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -621,41 +599,36 @@ const CSVViewer: React.FC = () => {
         setData(processedData);
         setHeaders(results.data[0]);
 
-        // Trouver les dates min et max
-        let minDate: Date | null = null;
-        let maxDate: Date | null = null;
+        // Génération des dates et techniciens uniques
+        const allDatesSet = new Set<string>();
+        const technicianSet = new Set<string>();
 
         processedData.forEach((row: string[]) => {
           if (row[2] && row[4]) {
             const startDate = new Date(row[2]);
             const endDate = new Date(row[4]);
             
-            if (!minDate || startDate < minDate) minDate = startDate;
-            if (!maxDate || endDate > maxDate) maxDate = endDate;
+            let currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+              allDatesSet.add(currentDate.toISOString().split('T')[0]);
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
           }
-        });
-
-        // Générer toutes les dates de la période
-        if (minDate && maxDate) {
-          const allDates = generateDateRange(minDate, maxDate);
-          setUniqueDates(allDates);
-        }
-
-        const technicianSet = new Set<string>();
-        processedData.forEach((row: string[]) => {
           if (row[15]) {
             technicianSet.add(row[15].trim());
           }
         });
 
+        const sortedDates = Array.from(allDatesSet).sort();
         const sortedTechnicians = Array.from(technicianSet)
           .filter(tech => tech && tech !== "Sans technicien")
-          .sort((a, b) => a.localeCompare(b));
+          .sort();
 
         if (technicianSet.has("Sans technicien")) {
           sortedTechnicians.push("Sans technicien");
         }
 
+        setUniqueDates(sortedDates);
         setAllTechnicians(sortedTechnicians);
 
         const initialFilters: Record<string, string> = {};
@@ -669,10 +642,6 @@ const CSVViewer: React.FC = () => {
       }
     });
   };
-
-  // ... Suite dans la partie 5
-
-  // ... Suite dans la partie 5
   // Composants de rendu de base
   const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
@@ -687,6 +656,29 @@ const CSVViewer: React.FC = () => {
             onChange={(e) => handleInputChange(header, e.target.value)}
             className="w-full p-1 border rounded"
           />
+        );
+      }
+      if (header.toLowerCase().includes('heure')) {
+        return (
+          <input
+            type="time"
+            value={editedData[header] || ''}
+            onChange={(e) => handleInputChange(header, e.target.value)}
+            className="w-full p-1 border rounded"
+          />
+        );
+      }
+      if (header === headers[15]) { // Champ technicien
+        return (
+          <select
+            value={editedData[header] || ''}
+            onChange={(e) => handleInputChange(header, e.target.value)}
+            className="w-full p-1 border rounded"
+          >
+            {allTechnicians.map(tech => (
+              <option key={tech} value={tech}>{tech}</option>
+            ))}
+          </select>
         );
       }
       return (
@@ -765,9 +757,7 @@ const CSVViewer: React.FC = () => {
     >
       <option value="">Sélectionnez une date</option>
       {uniqueDates.map(date => (
-        <option key={date} value={date}>
-          {formatDate(date)}
-        </option>
+        <option key={date} value={date}>{date}</option>
       ))}
     </select>
   );
@@ -794,98 +784,96 @@ const CSVViewer: React.FC = () => {
     </div>
   );
 
-  const renderSettings = (): React.ReactNode => (
-    <Card>
-      <CardContent className="space-y-4 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Paramètres d'affichage</h2>
-          <button
-            onClick={resetColumnVisibility}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Réinitialiser
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {columnVisibility.map((col) => (
-            <div key={col.index} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id={`col-${col.index}`}
-                checked={col.visible}
-                onChange={() => handleColumnVisibilityChange(col.index)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label htmlFor={`col-${col.index}`} className="text-sm">
-                {col.name}
-              </label>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  const renderFilterReset = (): React.ReactNode => {
-    if (!selectedTask) return null;
+  const renderCreateModal = (): React.ReactNode => {
+    if (!isCreateModalOpen) return null;
 
     return (
-      <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={() => setSelectedTask(null)}
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
-                   transition-colors duration-200 flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Réinitialiser le filtre
-        </button>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Créer une nouvelle opération</h2>
+            <button
+              onClick={() => {
+                setNewOperation({});
+                setIsCreateModalOpen(false);
+              }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {headers.map((header, index) => {
+              if (!getVisibleColumns().includes(index)) return null;
+
+              const inputProps = {
+                value: newOperation[header] || '',
+                onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => 
+                  setNewOperation(prev => ({
+                    ...prev,
+                    [header]: e.target.value
+                  })),
+                className: "w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              };
+
+              return (
+                <div key={header} className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">
+                    {header}
+                  </label>
+                  
+                  {header.toLowerCase().includes('date') ? (
+                    <input 
+                      type="date" 
+                      {...inputProps} 
+                    />
+                  ) : header.toLowerCase().includes('heure') ? (
+                    <input 
+                      type="time" 
+                      {...inputProps}
+                    />
+                  ) : header === headers[15] ? (
+                    <select {...inputProps}>
+                      <option value="">Sélectionner un technicien</option>
+                      {allTechnicians.map(tech => (
+                        <option key={tech} value={tech}>
+                          {tech}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input 
+                      type="text" 
+                      {...inputProps}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={() => {
+                setNewOperation({});
+                setIsCreateModalOpen(false);
+              }}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleCreateOperation}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            >
+              Créer
+            </button>
+          </div>
+        </div>
       </div>
     );
   };
-
-  const renderTabButtons = (): React.ReactNode => (
-    <div className="flex flex-wrap gap-2">
-      {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
-        <button
-          key={index}
-          onClick={() => setActiveTab(index)}
-          className={`
-            px-4 py-2 rounded-lg transition-all duration-200 flex items-center gap-2
-            ${activeTab === index 
-              ? 'bg-blue-500 text-white shadow-md scale-105' 
-              : 'bg-white hover:bg-gray-100'
-            }
-          `}
-        >
-          {title === 'Paramètres' && <Settings className="h-4 w-4" />}
-          {title}
-        </button>
-      ))}
-    </div>
-  );
-
-  const getDragMessage = (): React.ReactNode => {
-    if (!draggedTask) return null;
-
-    const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
-
-    return (
-      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-        {isUnassigned ? (
-          "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
-        ) : draggedTask.task[2] !== selectedDate ? (
-          <span className="text-red-600">
-            Impossible de déplacer une tâche en dehors de sa période ({formatDate(draggedTask.task[2])})
-          </span>
-        ) : (
-          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
-        )}
-      </div>
-    );
-  };
-
-  // ... Suite dans la partie 6
   // Rendu du Gantt Chart
   const renderGanttChart = (groupBy: string): React.ReactNode => {
     if (!selectedDate) {
@@ -966,91 +954,103 @@ const CSVViewer: React.FC = () => {
     });
 
     return (
-      <div style={{ overflowX: 'auto', width: '100%' }}>
-        <div style={{ display: 'flex', minWidth: '1000px' }}>
-          {/* Colonne des groupes */}
-          <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
-            <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
-                 className="flex items-center font-bold">
-              {groupBy}
-            </div>
-            {groupedData.map(({ group, rowHeight, isUnassignedGroup }, index) => (
-              <div 
-                key={group} 
-                style={{ height: `${rowHeight}px` }}
-                className={`
-                  flex items-center px-2.5 border-b border-gray-200
-                  ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                  ${group === 'Sans technicien' ? 'text-red-500' : ''}
-                `}
-              >
-                {group || 'N/A'}
+      <div className="relative rounded-lg border border-gray-200">
+        <div className="overflow-x-auto">
+          <div className="min-w-[1000px]">
+            {/* En-tête avec la timeline */}
+            <div className="sticky top-0 z-10 flex">
+              {/* Colonne des groupes */}
+              <div className="w-48 bg-gray-100 border-r border-gray-300">
+                <div className="h-10 flex items-center px-4 font-semibold border-b border-gray-300">
+                  {groupBy}
+                </div>
               </div>
-            ))}
-          </div>
+              
+              {/* Timeline */}
+              <div className="flex-1">
+                {renderTimeHeader({ HEADER_HEIGHT })}
+              </div>
+            </div>
 
-          {/* Zone de contenu */}
-          <div style={{ flex: 1, position: 'relative' }}>
-            {renderTimeHeader({ HEADER_HEIGHT })}
+            {/* Contenu du Gantt */}
             {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
               <div 
                 key={group}
-                style={{ height: `${rowHeight}px` }}
-                className={`
-                  relative border-b border-gray-200
-                  ${dropZoneActive === group ? 'bg-blue-50' : 
-                    isUnassignedGroup ? 'bg-yellow-50' : 
-                    index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                `}
-                onDragOver={handleDragOver}
-                onDragEnter={(e) => handleDragEnter(e, group)}
-                onDragLeave={(e) => handleDragLeave(e, group)}
-                onDrop={(e) => handleDrop(group, e)}
+                className="flex"
               >
-                {tasks.map((taskData) => {
-                  const verticalPosition = overlaps.get(taskData.operationId) || 0;
-                  const displayStartPercentage = taskData.dayStartPercentage ?? taskData.startPercentage;
-                  const displayEndPercentage = taskData.dayEndPercentage ?? (taskData.startPercentage + taskData.duration);
-                  const displayWidth = displayEndPercentage - displayStartPercentage;
+                {/* Label du groupe */}
+                <div 
+                  className={`
+                    w-48 px-4 border-r border-gray-300 flex items-center
+                    ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                  `}
+                  style={{ height: `${rowHeight}px` }}
+                >
+                  <span className="truncate font-medium">
+                    {group || 'N/A'}
+                  </span>
+                </div>
 
-                  return (
-                    <div
-                      key={`${taskData.operationId}_${selectedDate}`}
-                      draggable={true}
-                      onDragStart={(e) => handleDragStart(e, taskData)}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => handleTaskClick(taskData.operationId)}
-                      style={{
-                        position: 'absolute',
-                        left: `${displayStartPercentage}%`,
-                        width: `${displayWidth}%`,
-                        height: `${TASK_HEIGHT}px`,
-                        top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
-                        backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
-                        cursor: 'pointer',
-                        outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
-                        boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
-                      }}
-                      className={`
-                        rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
-                        hover:brightness-90 transition-all duration-200
-                        ${taskData.isUnassigned ? 'text-black' : ''}
-                        ${taskData.isMultiDay ? 'border-2 border-blue-300' : ''}
-                      `}
-                    >
-                      {renderGanttTaskContent({
-                        task: taskData.task,
-                        groupBy,
-                        labelIndex
-                      })}
+                {/* Zone des tâches */}
+                <div 
+                  className={`
+                    relative flex-1 border-b border-gray-300
+                    ${dropZoneActive === group ? 'bg-blue-50' : 
+                      isUnassignedGroup ? 'bg-yellow-50' : 
+                      index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                  `}
+                  style={{ height: `${rowHeight}px` }}
+                  onDragOver={handleDragOver}
+                  onDragEnter={(e) => handleDragEnter(e, group)}
+                  onDragLeave={(e) => handleDragLeave(e, group)}
+                  onDrop={(e) => handleDrop(group, e)}
+                >
+                  {tasks.map((taskData) => {
+                    const verticalPosition = overlaps.get(taskData.operationId) || 0;
+                    const displayStartPercentage = taskData.dayStartPercentage ?? taskData.startPercentage;
+                    const displayEndPercentage = taskData.dayEndPercentage ?? (taskData.startPercentage + taskData.duration);
+                    const displayWidth = displayEndPercentage - displayStartPercentage;
+
+                    return (
+                      <div
+                        key={`${taskData.operationId}_${selectedDate}`}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, taskData)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => handleTaskClick(taskData.operationId)}
+                        style={{
+                          position: 'absolute',
+                          left: `${displayStartPercentage}%`,
+                          width: `${displayWidth}%`,
+                          height: `${TASK_HEIGHT}px`,
+                          top: TASK_MARGIN + (verticalPosition * (TASK_HEIGHT + TASK_MARGIN)),
+                          backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
+                        }}
+                        className={`
+                          relative rounded cursor-pointer
+                          ${taskData.isUnassigned ? 'text-black' : 'text-white'}
+                          ${selectedTask === taskData.operationId ? 'ring-2 ring-yellow-400' : ''}
+                          ${taskData.isMultiDay ? 'border-2 border-blue-300' : ''}
+                          hover:brightness-90 transition-all duration-200
+                        `}
+                      >
+                        <div className="absolute inset-0 px-1 flex items-center overflow-hidden">
+                          {renderGanttTaskContent({
+                            task: taskData.task,
+                            groupBy,
+                            labelIndex
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {tasks.length === 0 && groupBy === 'Technicien' && !isUnassignedGroup && (
+                    <div className="h-full w-full flex items-center justify-center text-gray-400 italic">
+                      Aucune tâche assignée
                     </div>
-                  );
-                })}
-                {tasks.length === 0 && groupBy === 'Technicien' && !isUnassignedGroup && (
-                  <div className="h-full w-full flex items-center justify-center text-gray-400 italic">
-                    Aucune tâche assignée
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1058,31 +1058,7 @@ const CSVViewer: React.FC = () => {
       </div>
     );
   };
-
-  // ... Suite dans la partie 7
-  // Rendu des vues principales et export CSV
-  const handleExportCSV = (): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
-    });
-    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
-    downloadCSV(csv, fileName);
-  };
-
-  const downloadCSV = (content: string, fileName: string): void => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
-
+  // Configuration des onglets et vues
   const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -1111,7 +1087,7 @@ const CSVViewer: React.FC = () => {
             <h3 className="text-lg font-semibold mb-4">
               {selectedTask 
                 ? "Détails de l'opération sélectionnée"
-                : `Détails des opérations pour le ${formatDate(selectedDate)}`}
+                : `Détails des opérations pour le ${selectedDate}`}
             </h3>
             {renderTable(filterDataForDate(selectedDate, selectedTask))}
           </div>
@@ -1120,126 +1096,86 @@ const CSVViewer: React.FC = () => {
     </div>
   );
 
-  const renderTable = (dataToRender: string[][]): React.ReactNode => {
-    const visibleColumns = getVisibleColumns();
-    
-    return (
-      <div className="w-full">
-        <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 rounded-lg">
-          <h2 className="text-lg font-semibold">Vue Tableau</h2>
-          <button
-            onClick={handleExportCSV}
-            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
-                     transition-colors duration-200 flex items-center gap-2"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Exporter en CSV
-          </button>
-        </div>
-
-        <div className="w-full overflow-x-auto">
-          <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-            <thead>
-              <tr>
-                {headers.map((header, index) => {
-                  if (!visibleColumns.includes(index)) return null;
+  const renderTable = (dataToRender: string[][]): React.ReactNode => (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            {headers.map((header, index) => {
+              if (!getVisibleColumns().includes(index)) return null;
+              
+              return (
+                <th
+                  key={header}
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  {header}
+                  {isFiltering && (
+                    <input
+                      type="text"
+                      value={filters[header] || ''}
+                      onChange={(e) => handleFilterChange(header, e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm 
+                               focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                      placeholder={`Filtrer ${header}`}
+                    />
+                  )}
+                </th>
+              );
+            })}
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Actions
+            </th>
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {dataToRender.map((row, rowIndex) => {
+            const operationId = getOperationId(row);
+            const isEditing = editingRow === operationId;
+            
+            return (
+              <tr key={rowIndex} className="hover:bg-gray-50">
+                {row.map((cell, cellIndex) => {
+                  if (!getVisibleColumns().includes(cellIndex)) return null;
                   
                   return (
-                    <th
-                      key={index}
-                      className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="truncate">{header}</span>
-                        {isFiltering && (
-                          <input
-                            type="text"
-                            value={filters[header] || ''}
-                            onChange={(e) => handleFilterChange(header, e.target.value)}
-                            placeholder={`Filtrer ${header}`}
-                            className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
-                          />
-                        )}
-                      </div>
-                    </th>
+                    <td key={cellIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                    </td>
                   );
                 })}
-                <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
-                  Actions
-                </th>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  {isEditing ? (
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => handleSaveEdit(operationId)}
+                        className="text-green-600 hover:text-green-900"
+                      >
+                        <Save className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={handleCancelEdit}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleEditClick(row)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </td>
               </tr>
-            </thead>
-            <tbody className="bg-white">
-              {dataToRender.map((row, rowIndex) => {
-                const operationId = getOperationId(row);
-                const isEditing = editingRow === operationId;
-                const isUnassigned = !row[2] || !row[4];
-
-                return (
-                  <tr
-                    key={operationId}
-                    className={`
-                      ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
-                      ${isEditing ? 'bg-yellow-50' : ''}
-                      ${isUnassigned ? 'bg-yellow-50' : ''}
-                      hover:bg-blue-50
-                    `}
-                  >
-                    {row.map((cell, cellIndex) => {
-                      if (!visibleColumns.includes(cellIndex)) return null;
-                      
-                      return (
-                        <td
-                          key={cellIndex}
-                          className="border border-gray-300 py-2 px-4 text-sm"
-                        >
-                          <div className="truncate">
-                            {renderCell(row, cell, headers[cellIndex], cellIndex)}
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="border border-gray-300 py-2 px-4">
-                      <div className="flex justify-center gap-2">
-                        {isEditing ? (
-                          <>
-                            <button
-                              onClick={() => handleSaveEdit(operationId)}
-                              className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-                              title="Enregistrer"
-                            >
-                              <Save className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-                              title="Annuler"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handleEditClick(row)}
-                            className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-                            title="Modifier"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 
   // Configuration des onglets
   const tabContent = [
@@ -1258,10 +1194,6 @@ const CSVViewer: React.FC = () => {
     {
       title: 'Vue Technicien',
       content: renderGanttView('Technicien', true)
-    },
-    {
-      title: 'Paramètres',
-      content: renderSettings()
     }
   ];
 
@@ -1269,7 +1201,7 @@ const CSVViewer: React.FC = () => {
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
       <div className="mb-6 space-y-4">
-        {/* Section upload de fichier */}
+        {/* Section upload de fichier et création */}
         <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
           <input 
             type="file" 
@@ -1278,16 +1210,41 @@ const CSVViewer: React.FC = () => {
             className="flex-1"
           />
           <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+                     transition-colors duration-200 flex items-center gap-2"
+          >
+            <Edit2 className="h-4 w-4" />
+            Nouvelle opération
+          </button>
+          <button
             onClick={handleExportCSV}
             className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
                      transition-colors duration-200 flex items-center gap-2"
           >
+            <Save className="h-4 w-4" />
             Exporter CSV
           </button>
         </div>
 
         {/* Onglets */}
-        {renderTabButtons()}
+        <div className="flex flex-wrap gap-2">
+          {tabContent.map(({ title }, index) => (
+            <button
+              key={title}
+              onClick={() => setActiveTab(index)}
+              className={`
+                px-4 py-2 rounded-lg transition-all duration-200
+                ${activeTab === index 
+                  ? 'bg-blue-500 text-white shadow-md scale-105' 
+                  : 'bg-white hover:bg-gray-100'
+                }
+              `}
+            >
+              {title}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Contenu principal */}
@@ -1296,9 +1253,14 @@ const CSVViewer: React.FC = () => {
           {tabContent[activeTab].content}
         </CardContent>
       </Card>
+
+      {/* Modal de création */}
+      {renderCreateModal()}
+
+      {/* Message drag and drop */}
+      {draggedTask && getDragMessage()}
     </div>
   );
 };
 
-// Export du composant mémorisé
 export default React.memo(CSVViewer);
