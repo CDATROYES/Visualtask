@@ -1159,7 +1159,15 @@ const CSVViewer: React.FC = () => {
   };
 
   // ... Suite dans la partie 7
- // Rendu du tableau principal
+ // Fonction de création d'une nouvelle opération
+  const handleCreateOperation = (): void => {
+    const newRow = headers.map(header => newOperation[header] || '');
+    setData(prev => [...prev, newRow]);
+    setNewOperation({});
+    setIsCreateModalOpen(false);
+  };
+
+  // Rendu du tableau principal
   const renderTable = (dataToRender: string[][]): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
@@ -1327,10 +1335,7 @@ const CSVViewer: React.FC = () => {
               Annuler
             </button>
             <button
-              onClick={() => {
-                handleCreateOperation();
-                setIsCreateModalOpen(false);
-              }}
+              onClick={handleCreateOperation}
               className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
               Créer
@@ -1339,13 +1344,6 @@ const CSVViewer: React.FC = () => {
         </div>
       </div>
     );
-  };
-
-  // Fonction de création d'une nouvelle opération
-  const handleCreateOperation = (): void => {
-    const newRow = headers.map(header => newOperation[header] || '');
-    setData(prev => [...prev, newRow]);
-    setNewOperation({});
   };
 
   // Rendu principal du composant
