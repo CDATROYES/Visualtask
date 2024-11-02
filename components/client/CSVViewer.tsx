@@ -135,8 +135,9 @@ const CSVViewer: React.FC = () => {
     }
   }, [headers]);
   
-  //*********************************************************************************************************************suite dans la partie 2
-  // Time management functions
+//############################################################################################### suite dans la partie 2 ######################################################################################################
+
+// Time management functions
   const getTimePercentage = (time: string): number => {
     if (!time) return 33.33; // Default to 8:00
     try {
@@ -162,10 +163,100 @@ const CSVViewer: React.FC = () => {
     }
   };
 
+  // Edit handlers
+  const handleInputChange = useCallback((header: string, value: string): void => {
+    setEditedData(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  }, []);
+
+  const handleEditClick = useCallback((row: string[]): void => {
+    const operationId = getOperationId(row);
+    setEditingRow(operationId);
+    const rowData: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      rowData[header] = row[index] || '';
+    });
+    setEditedData(rowData);
+  }, [headers]);
+
+  const handleCancelEdit = useCallback((): void => {
+    setEditingRow(null);
+    setEditedData({});
+  }, []);
+
+  const handleSaveEdit = useCallback((operationId: string): void => {
+    setData(prevData => 
+      prevData.map(row => getOperationId(row) === operationId 
+        ? headers.map(header => editedData[header] || '')
+        : row
+      )
+    );
+    setEditingRow(null);
+    setEditedData({});
+  }, [headers, editedData]);
+
+  // Task click handler
   const handleTaskClick = useCallback((operationId: string): void => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   }, []);
 
+  // Column visibility handlers
+  const handleColumnVisibilityChange = useCallback((columnIndex: number): void => {
+    setColumnVisibility(prev => 
+      prev.map(col => 
+        col.index === columnIndex 
+          ? { ...col, visible: !col.visible }
+          : col
+      )
+    );
+  }, []);
+
+  const resetColumnVisibility = useCallback((): void => {
+    setColumnVisibility(prev => 
+      prev.map((col, index) => ({
+        ...col,
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
+      }))
+    );
+  }, []);
+
+  const getVisibleColumns = useCallback((): number[] => {
+    return columnVisibility
+      .filter(col => col.visible)
+      .map(col => col.index);
+  }, [columnVisibility]);
+
+  // Filter handlers
+  const handleFilterChange = useCallback((header: string, value: string): void => {
+    setFilters(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  }, []);
+
+  // Technician handlers
+  const handleAddTechnician = useCallback((): void => {
+    const trimmedTechnician = newTechnician.trim();
+    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
+      setAllTechnicians(prev => {
+        if (prev.includes(trimmedTechnician)) {
+          return prev;
+        }
+        const technicians = prev.filter(tech => tech !== "Sans technicien");
+        technicians.push(trimmedTechnician);
+        technicians.sort((a, b) => a.localeCompare(b));
+        if (prev.includes("Sans technicien")) {
+          technicians.push("Sans technicien");
+        }
+        return technicians;
+      });
+      setNewTechnician('');
+    }
+  }, [newTechnician]);
+
+  // Task percentage calculations
   const calculateDayPercentages = useCallback((
     task: string[], 
     selectedDate: string
@@ -203,70 +294,7 @@ const CSVViewer: React.FC = () => {
     }
   }, []);
 
-  const assignDateToTask = useCallback((task: string[], targetDate: string): string[] => {
-    const updatedTask = [...task];
-    updatedTask[2] = targetDate;    
-    
-    const hasTime = Boolean(task[3] && task[5]);
-    if (hasTime) {
-      updatedTask[3] = task[3];    // Keep existing start time
-      updatedTask[4] = targetDate;  // New end date
-      updatedTask[5] = task[5];    // Keep existing end time
-    } else {
-      updatedTask[3] = '08:00';    // Default start time
-      updatedTask[4] = targetDate;  // End date
-      updatedTask[5] = '09:00';    // Default end time
-    }
-    
-    return updatedTask;
-  }, []);
-
-  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
-    setData(prevData => {
-      return prevData.map(row => {
-        if (getOperationId(row) === operationId) {
-          const newRow = [...row];
-          newRow[15] = newTechnician;
-          return newRow;
-        }
-        return row;
-      });
-    });
-  }, []);
-
-  const handleFilterChange = (header: string, value: string): void => {
-    setFilters(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
-
-  const handleColumnVisibilityChange = (columnIndex: number): void => {
-    setColumnVisibility(prev => 
-      prev.map(col => 
-        col.index === columnIndex 
-          ? { ...col, visible: !col.visible }
-          : col
-      )
-    );
-  };
-
-  const resetColumnVisibility = (): void => {
-    setColumnVisibility(prev => 
-      prev.map((col, index) => ({
-        ...col,
-        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
-      }))
-    );
-  };
-
-  const getVisibleColumns = (): number[] => {
-    return columnVisibility
-      .filter(col => col.visible)
-      .map(col => col.index);
-  };
-
-  // Filter memoization
+  // Data filtering
   const filteredData = useMemo(() => 
     data.filter(row => 
       headers.every((header, index) => {
@@ -276,9 +304,11 @@ const CSVViewer: React.FC = () => {
       })
     )
   , [data, headers, filters]);
-//***********************************************************************************************suite dans la partie 3
- // Data processing and event handlers
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
+
+//############################################################################################### suite dans la partie 3 ######################################################################################################
+
+// Drag and Drop handlers
+  const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
     const taskData: DraggedTaskData = {
       task: task.task,
@@ -313,7 +343,7 @@ const CSVViewer: React.FC = () => {
     requestAnimationFrame(() => {
       document.body.removeChild(ghostElement);
     });
-  };
+  }, [selectedDate]);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
@@ -337,6 +367,38 @@ const CSVViewer: React.FC = () => {
   const handleDragEnd = useCallback((): void => {
     setDraggedTask(null);
     setDropZoneActive(null);
+  }, []);
+
+  // Task assignment functions
+  const assignDateToTask = useCallback((task: string[], targetDate: string): string[] => {
+    const updatedTask = [...task];
+    updatedTask[2] = targetDate;    
+    
+    const hasTime = Boolean(task[3] && task[5]);
+    if (hasTime) {
+      updatedTask[3] = task[3];    // Keep existing start time
+      updatedTask[4] = targetDate;  // New end date
+      updatedTask[5] = task[5];    // Keep existing end time
+    } else {
+      updatedTask[3] = '08:00';    // Default start time
+      updatedTask[4] = targetDate;  // End date
+      updatedTask[5] = '09:00';    // Default end time
+    }
+    
+    return updatedTask;
+  }, []);
+
+  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+    setData(prevData => {
+      return prevData.map(row => {
+        if (getOperationId(row) === operationId) {
+          const newRow = [...row];
+          newRow[15] = newTechnician;
+          return newRow;
+        }
+        return row;
+      });
+    });
   }, []);
 
   const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
@@ -437,26 +499,9 @@ const CSVViewer: React.FC = () => {
     return overlaps;
   }, []);
 
-  const handleAddTechnician = (): void => {
-    const trimmedTechnician = newTechnician.trim();
-    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
-      setAllTechnicians(prev => {
-        if (prev.includes(trimmedTechnician)) {
-          return prev;
-        }
-        const technicians = prev.filter(tech => tech !== "Sans technicien");
-        technicians.push(trimmedTechnician);
-        technicians.sort((a, b) => a.localeCompare(b));
-        if (prev.includes("Sans technicien")) {
-          technicians.push("Sans technicien");
-        }
-        return technicians;
-      });
-      setNewTechnician('');
-    }
-  };
- //**********************************************************************************************suite dans la partie 4
-// Data filtering and file handling
+//############################################################################################### suite dans la partie 4 ######################################################################################################
+
+// Data filtering and grouping
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -535,8 +580,8 @@ const CSVViewer: React.FC = () => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
 
-  // Render helper components
-  const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
+  // Basic render components
+  const renderCell = useCallback((row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
     const isEditing = editingRow === operationId;
 
@@ -584,9 +629,9 @@ const CSVViewer: React.FC = () => {
       );
     }
     return cell || '';
-  };
+  }, [editingRow, editedData, headers, allTechnicians, handleInputChange]);
 
-  const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
+  const renderTimeHeader = useCallback(({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
     <div style={{ 
       height: `${HEADER_HEIGHT}px`, 
       borderBottom: '2px solid #333', 
@@ -614,9 +659,9 @@ const CSVViewer: React.FC = () => {
         </div>
       ))}
     </div>
-  );
+  ), []);
 
-  const renderGanttTaskContent = ({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
+  const renderGanttTaskContent = useCallback(({ task, groupBy, labelIndex }: Omit<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
     if (!task) return null;
     
     const isUnassigned = !task[2] || !task[4];
@@ -640,10 +685,119 @@ const CSVViewer: React.FC = () => {
       );
     }
     return task[labelIndex] || 'N/A';
-  };
-//*******************************************************************************************************************************suite dans la partie 5
-// File handling and UI components
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+  }, [isSameDay]);
+
+//############################################################################################### suite dans la partie 5 ######################################################################################################
+
+// UI Components
+  const renderDateSelector = useCallback((): React.ReactNode => (
+    <select 
+      value={selectedDate} 
+      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
+      className="w-full md:w-auto p-2 border rounded"
+    >
+      <option value="">Sélectionnez une date</option>
+      {uniqueDates.map(date => (
+        <option key={date} value={date}>
+          {formatDate(date)}
+        </option>
+      ))}
+    </select>
+  ), [selectedDate, uniqueDates, formatDate]);
+
+  const renderTechnicianInput = useCallback((): React.ReactNode => (
+    <div className="flex flex-wrap items-center gap-2">
+      <input
+        type="text"
+        value={newTechnician}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
+        placeholder="Nouveau technicien"
+        className="flex-1 min-w-[200px] p-2 border rounded"
+      />
+      <button
+        onClick={handleAddTechnician}
+        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+                 transition-colors duration-200 whitespace-nowrap"
+        disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
+        title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
+               "Impossible d'ajouter 'Sans technicien'" : ''}
+      >
+        Ajouter Technicien
+      </button>
+    </div>
+  ), [newTechnician, handleAddTechnician]);
+
+  const renderSettings = useCallback((): React.ReactNode => (
+    <Card>
+      <CardContent className="space-y-4 p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Paramètres d'affichage</h2>
+          <button
+            onClick={resetColumnVisibility}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Réinitialiser
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {columnVisibility.map((col) => (
+            <div key={col.index} className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id={`col-${col.index}`}
+                checked={col.visible}
+                onChange={() => handleColumnVisibilityChange(col.index)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <label htmlFor={`col-${col.index}`} className="text-sm">
+                {col.name}
+              </label>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  ), [columnVisibility, resetColumnVisibility, handleColumnVisibilityChange]);
+
+  const renderFilterReset = useCallback((): React.ReactNode => {
+    if (!selectedTask) return null;
+
+    return (
+      <div className="flex items-center justify-end mb-4">
+        <button
+          onClick={() => setSelectedTask(null)}
+          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
+                   transition-colors duration-200 flex items-center gap-2"
+        >
+          <X className="h-4 w-4" />
+          Réinitialiser le filtre
+        </button>
+      </div>
+    );
+  }, [selectedTask]);
+
+  const getDragMessage = useCallback((): React.ReactNode => {
+    if (!draggedTask) return null;
+
+    const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
+
+    return (
+      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+        {isUnassigned ? (
+          "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
+        ) : draggedTask.task[2] !== selectedDate ? (
+          <span className="text-red-600">
+            Impossible de déplacer une tâche en dehors de sa période ({formatDate(draggedTask.task[2])})
+          </span>
+        ) : (
+          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
+        )}
+      </div>
+    );
+  }, [draggedTask, selectedDate, formatDate]);
+
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -709,9 +863,9 @@ const CSVViewer: React.FC = () => {
         console.error('Error reading file:', error);
       }
     });
-  };
+  }, []);
 
-  const handleExportCSV = (): void => {
+  const handleExportCSV = useCallback((): void => {
     const dataToExport = isFiltering ? filteredData : data;
     const csv = unparse({
       fields: headers,
@@ -728,117 +882,12 @@ const CSVViewer: React.FC = () => {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
-  };
+  }, [data, headers, isFiltering, filteredData, selectedDate]);
 
-  const renderDateSelector = (): React.ReactNode => (
-    <select 
-      value={selectedDate} 
-      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
-      className="w-full md:w-auto p-2 border rounded"
-    >
-      <option value="">Sélectionnez une date</option>
-      {uniqueDates.map(date => (
-        <option key={date} value={date}>
-          {formatDate(date)}
-        </option>
-      ))}
-    </select>
-  );
+//############################################################################################### suite dans la partie 6 ######################################################################################################
 
-  const renderTechnicianInput = (): React.ReactNode => (
-    <div className="flex flex-wrap items-center gap-2">
-      <input
-        type="text"
-        value={newTechnician}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTechnician(e.target.value)}
-        placeholder="Nouveau technicien"
-        className="flex-1 min-w-[200px] p-2 border rounded"
-      />
-      <button
-        onClick={handleAddTechnician}
-        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-                 transition-colors duration-200 whitespace-nowrap"
-        disabled={newTechnician.trim().toLowerCase() === 'sans technicien'}
-        title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
-               "Impossible d'ajouter 'Sans technicien'" : ''}
-      >
-        Ajouter Technicien
-      </button>
-    </div>
-  );
-
-  const renderSettings = (): React.ReactNode => (
-    <Card>
-      <CardContent className="space-y-4 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Paramètres d'affichage</h2>
-          <button
-            onClick={resetColumnVisibility}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Réinitialiser
-          </button>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {columnVisibility.map((col) => (
-            <div key={col.index} className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id={`col-${col.index}`}
-                checked={col.visible}
-                onChange={() => handleColumnVisibilityChange(col.index)}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <label htmlFor={`col-${col.index}`} className="text-sm">
-                {col.name}
-              </label>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  const renderFilterReset = (): React.ReactNode => {
-    if (!selectedTask) return null;
-
-    return (
-      <div className="flex items-center justify-end mb-4">
-        <button
-          onClick={() => setSelectedTask(null)}
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 
-                   transition-colors duration-200 flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Réinitialiser le filtre
-        </button>
-      </div>
-    );
-  };
-
-  const getDragMessage = (): React.ReactNode => {
-    if (!draggedTask) return null;
-
-    const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
-
-    return (
-      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-        {isUnassigned ? (
-          "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
-        ) : draggedTask.task[2] !== selectedDate ? (
-          <span className="text-red-600">
-            Impossible de déplacer une tâche en dehors de sa période ({formatDate(draggedTask.task[2])})
-          </span>
-        ) : (
-          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
-        )}
-      </div>
-    );
-  };
-//*********************************************************************************************************************** suite dans la partie 6
-// Gantt Chart and Table Components
-  const renderGanttChart = (groupBy: string): React.ReactNode => {
+// Gantt Chart rendering
+  const renderGanttChart = useCallback((groupBy: string): React.ReactNode => {
     if (!selectedDate) {
       return <p>Veuillez sélectionner une date</p>;
     }
@@ -1006,9 +1055,26 @@ const CSVViewer: React.FC = () => {
         </div>
       </div>
     );
-  };
+  }, [
+    selectedDate, 
+    filterDataForDate, 
+    groupDataByType, 
+    handleDragOver, 
+    handleDragEnter, 
+    handleDragLeave, 
+    handleDrop, 
+    handleDragStart, 
+    handleDragEnd, 
+    handleTaskClick, 
+    renderTimeHeader, 
+    renderGanttTaskContent, 
+    dropZoneActive, 
+    selectedTask,
+    calculateDayPercentages,
+    detectOverlaps
+  ]);
 
-  const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
+  const renderGanttView = useCallback((groupBy: string, showTechnicianInput: boolean = false) => (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         {renderDateSelector()}
@@ -1043,10 +1109,24 @@ const CSVViewer: React.FC = () => {
         )}
       </div>
     </div>
-  );
-// ************************************************************************************************************************************suite dans la partie 7
-// Table render and configuration
-  const renderTable = (dataToRender: string[][]): React.ReactNode => {
+  ), [
+    renderDateSelector,
+    renderTechnicianInput,
+    renderGanttChart,
+    getDragMessage,
+    renderFilterReset,
+    renderTable,
+    draggedTask,
+    selectedDate,
+    selectedTask,
+    filterDataForDate,
+    formatDate
+  ]);
+
+// ############################################################################################## suite dans la partie 7 ######################################################################################################
+
+// Table render
+  const renderTable = useCallback((dataToRender: string[][]): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
     return (
@@ -1139,7 +1219,7 @@ const CSVViewer: React.FC = () => {
                               <Save className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={() => handleCancelEdit()}
+                              onClick={handleCancelEdit}
                               className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
                               title="Annuler"
                             >
@@ -1165,10 +1245,10 @@ const CSVViewer: React.FC = () => {
         </div>
       </div>
     );
-  };
+  }, [headers, isFiltering, filters, editingRow, handleFilterChange, handleSaveEdit, handleCancelEdit, handleEditClick, renderCell, getVisibleColumns]);
 
   // Tab configuration
-  const tabContent = [
+  const tabContent = useMemo(() => [
     { 
       title: 'Tableau', 
       content: renderTable(filteredData) 
@@ -1189,9 +1269,9 @@ const CSVViewer: React.FC = () => {
       title: 'Paramètres',
       content: renderSettings()
     }
-  ];
+  ], [filteredData, renderTable, renderGanttView, renderSettings]);
 
-  const renderTabButtons = (): React.ReactNode => (
+  const renderTabButtons = useCallback((): React.ReactNode => (
     <div className="flex flex-wrap gap-2">
       {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
         <button
@@ -1210,7 +1290,7 @@ const CSVViewer: React.FC = () => {
         </button>
       ))}
     </div>
-  );
+  ), [activeTab]);
 
   // Final component render
   return (
