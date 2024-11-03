@@ -163,7 +163,44 @@ const CSVViewer: React.FC = () => {
     }
   }, [getTimePercentage]);
 
-  // Data filtering - Placing this early as it's used by other functions
+  const calculateDayPercentages = useCallback((
+    task: string[], 
+    selectedDate: string
+  ): { dayStartPercentage: number; dayEndPercentage: number } => {
+    if (!task[2] || !task[4]) {
+      const hasTime = Boolean(task[3] && task[5]);
+      return { 
+        dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+        dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.5
+      };
+    }
+    
+    if (isSameDay(task[2], task[4])) {
+      return {
+        dayStartPercentage: getTimePercentage(task[3]),
+        dayEndPercentage: getTimePercentage(task[5])
+      };
+    }
+    
+    if (isSameDay(selectedDate, task[2])) {
+      return {
+        dayStartPercentage: getTimePercentage(task[3]),
+        dayEndPercentage: 100
+      };
+    } else if (isSameDay(selectedDate, task[4])) {
+      return {
+        dayStartPercentage: 0,
+        dayEndPercentage: getTimePercentage(task[5])
+      };
+    } else {
+      return {
+        dayStartPercentage: 0,
+        dayEndPercentage: 100
+      };
+    }
+  }, [getTimePercentage, isSameDay]);
+
+  // Data filtering
   const filteredData = useMemo(() => 
     data.filter(row => 
       headers.every((header, index) => {
@@ -241,7 +278,7 @@ const CSVViewer: React.FC = () => {
     setEditedData({});
   }, [headers, editedData, getOperationId]);
 
-  // Export handlers - Now can safely use filteredData
+  // Export handlers
   const handleExportCSV = useCallback((): void => {
     const dataToExport = isFiltering ? filteredData : data;
     const csv = unparse({
@@ -286,47 +323,7 @@ const CSVViewer: React.FC = () => {
     }
   }, [newTechnician]);
 
-  // Percentage calculations
-  const calculateDayPercentages = useCallback((
-    task: string[], 
-    selectedDate: string
-  ): { dayStartPercentage: number; dayEndPercentage: number } => {
-    if (!task[2] || !task[4]) {
-      const hasTime = Boolean(task[3] && task[5]);
-      return { 
-        dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
-        dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.5
-      };
-    }
-    
-    if (isSameDay(task[2], task[4])) {
-      return {
-        dayStartPercentage: getTimePercentage(task[3]),
-        dayEndPercentage: getTimePercentage(task[5])
-      };
-    }
-    
-    if (isSameDay(selectedDate, task[2])) {
-      return {
-        dayStartPercentage: getTimePercentage(task[3]),
-        dayEndPercentage: 100
-      };
-    } else if (isSameDay(selectedDate, task[4])) {
-      return {
-        dayStartPercentage: 0,
-        dayEndPercentage: getTimePercentage(task[5])
-      };
-    } else {
-      return {
-        dayStartPercentage: 0,
-        dayEndPercentage: 100
-      };
-    }
-  }, [getTimePercentage, isSameDay]);
-
-//############################################################################################### suite dans la partie 3 ######################################################################################################
-
-// Task assignment functions
+  // Assignment handlers
   const assignDateToTask = useCallback((task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
     updatedTask[2] = targetDate;    
@@ -358,7 +355,9 @@ const CSVViewer: React.FC = () => {
     });
   }, [getOperationId]);
 
-  // Drag and Drop handlers
+//############################################################################################### suite dans la partie 3 ######################################################################################################
+
+// Drag and Drop handlers
   const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
     e.stopPropagation();
     const taskData: DraggedTaskData = {
@@ -470,96 +469,15 @@ const CSVViewer: React.FC = () => {
 
     setDropZoneActive(null);
     setDraggedTask(null);
-  }, [draggedTask, selectedDate, assignDateToTask, updateAssignment, getOperationId]);
+  }, [
+    draggedTask,
+    selectedDate, 
+    assignDateToTask, 
+    updateAssignment, 
+    getOperationId
+  ]);
 
-  // Percentage calculations
-  const calculateDayPercentages = useCallback((
-    task: string[], 
-    selectedDate: string
-  ): { dayStartPercentage: number; dayEndPercentage: number } => {
-    if (!task[2] || !task[4]) {
-      const hasTime = Boolean(task[3] && task[5]);
-      return { 
-        dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
-        dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.5
-      };
-    }
-    
-    if (isSameDay(task[2], task[4])) {
-      return {
-        dayStartPercentage: getTimePercentage(task[3]),
-        dayEndPercentage: getTimePercentage(task[5])
-      };
-    }
-    
-    if (isSameDay(selectedDate, task[2])) {
-      return {
-        dayStartPercentage: getTimePercentage(task[3]),
-        dayEndPercentage: 100
-      };
-    } else if (isSameDay(selectedDate, task[4])) {
-      return {
-        dayStartPercentage: 0,
-        dayEndPercentage: getTimePercentage(task[5])
-      };
-    } else {
-      return {
-        dayStartPercentage: 0,
-        dayEndPercentage: 100
-      };
-    }
-  }, [getTimePercentage, isSameDay]);
-
-  // Overlap detection
-  const detectOverlaps = useCallback((tasks: TaskData[]): Map<string, number> => {
-    const sortedTasks = [...tasks].sort((a, b) => {
-      const aStart = a.dayStartPercentage ?? a.startPercentage;
-      const bStart = b.dayStartPercentage ?? b.startPercentage;
-      
-      if (aStart === bStart) {
-        const aEnd = a.dayEndPercentage ?? (a.startPercentage + a.duration);
-        const bEnd = b.dayEndPercentage ?? (b.startPercentage + b.duration);
-        return bEnd - aEnd;
-      }
-      return aStart - bStart;
-    });
-
-    const overlaps = new Map<string, number>();
-    const timeSlots = new Map<string, string>();
-
-    for (const task of sortedTasks) {
-      const currentId = getOperationId(task.task);
-      const start = task.dayStartPercentage ?? task.startPercentage;
-      const end = task.dayEndPercentage ?? (task.startPercentage + task.duration);
-
-      let level = 0;
-      let foundSlot = false;
-
-      while (!foundSlot) {
-        foundSlot = true;
-        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-          const timeKey = `${level}_${time}`;
-          if (timeSlots.has(timeKey)) {
-            foundSlot = false;
-            level++;
-            break;
-          }
-        }
-      }
-
-      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
-        timeSlots.set(`${level}_${time}`, currentId);
-      }
-
-      overlaps.set(currentId, level);
-    }
-
-    return overlaps;
-  }, [getOperationId]);
-
-//############################################################################################### suite dans la partie 4 ######################################################################################################
-
-// Data filtering functions
+  // Data filtering functions
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -638,7 +556,56 @@ const CSVViewer: React.FC = () => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data, getOperationId]);
 
-  // Basic render components
+  // Overlap detection
+  const detectOverlaps = useCallback((tasks: TaskData[]): Map<string, number> => {
+    const sortedTasks = [...tasks].sort((a, b) => {
+      const aStart = a.dayStartPercentage ?? a.startPercentage;
+      const bStart = b.dayStartPercentage ?? b.startPercentage;
+      
+      if (aStart === bStart) {
+        const aEnd = a.dayEndPercentage ?? (a.startPercentage + a.duration);
+        const bEnd = b.dayEndPercentage ?? (b.startPercentage + b.duration);
+        return bEnd - aEnd;
+      }
+      return aStart - bStart;
+    });
+
+    const overlaps = new Map<string, number>();
+    const timeSlots = new Map<string, string>();
+
+    for (const task of sortedTasks) {
+      const currentId = getOperationId(task.task);
+      const start = task.dayStartPercentage ?? task.startPercentage;
+      const end = task.dayEndPercentage ?? (task.startPercentage + task.duration);
+
+      let level = 0;
+      let foundSlot = false;
+
+      while (!foundSlot) {
+        foundSlot = true;
+        for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+          const timeKey = `${level}_${time}`;
+          if (timeSlots.has(timeKey)) {
+            foundSlot = false;
+            level++;
+            break;
+          }
+        }
+      }
+
+      for (let time = Math.floor(start); time <= Math.ceil(end); time += 1) {
+        timeSlots.set(`${level}_${time}`, currentId);
+      }
+
+      overlaps.set(currentId, level);
+    }
+
+    return overlaps;
+  }, [getOperationId]);
+
+//############################################################################################### suite dans la partie 4 ######################################################################################################
+
+// Basic render components
   const renderCell = useCallback((row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
     const isEditing = editingRow === operationId;
@@ -745,9 +712,6 @@ const CSVViewer: React.FC = () => {
     return task[labelIndex] || 'N/A';
   }, [isSameDay]);
 
-//############################################################################################### suite dans la partie 5 ######################################################################################################
-
-// UI Components
   const renderDateSelector = useCallback((): React.ReactNode => (
     <select 
       value={selectedDate} 
@@ -876,7 +840,9 @@ const CSVViewer: React.FC = () => {
     </div>
   ), [activeTab]);
 
-  // Important: Déclarer renderTable avant renderGanttView car il est utilisé dedans
+//############################################################################################### suite dans la partie 5 ######################################################################################################
+
+// Important: Déclarer renderTable avant renderGanttView car il est utilisé dedans
   const renderTable = useCallback((dataToRender: string[][]): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
@@ -1010,6 +976,79 @@ const CSVViewer: React.FC = () => {
     handleExportCSV,
     getOperationId
   ]);
+
+  const renderGanttView = useCallback((groupBy: string, showTechnicianInput: boolean = false) => (
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        {renderDateSelector()}
+        {showTechnicianInput && renderTechnicianInput()}
+      </div>
+
+      <div className="space-y-6">
+        <div className="relative bg-white rounded-lg shadow-sm">
+          {renderGanttChart(groupBy)}
+        </div>
+        
+        {draggedTask && getDragMessage()}
+        
+        <div className="text-sm text-gray-500 italic space-y-1">
+          {showTechnicianInput && (
+            <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
+          )}
+          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
+          <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
+        </div>
+
+        {selectedDate && (
+          <div className="mt-8 border-t-2 border-gray-200 pt-8">
+            {renderFilterReset()}
+            <h3 className="text-lg font-semibold mb-4">
+              {selectedTask 
+                ? "Détails de l'opération sélectionnée"
+                : `Détails des opérations pour le ${formatDate(selectedDate)}`}
+            </h3>
+            {renderTable(filterDataForDate(selectedDate, selectedTask))}
+          </div>
+        )}
+      </div>
+    </div>
+  ), [
+    renderDateSelector,
+    renderTechnicianInput,
+    renderGanttChart,
+    getDragMessage,
+    renderFilterReset,
+    renderTable,
+    draggedTask,
+    selectedDate,
+    selectedTask,
+    filterDataForDate,
+    formatDate
+  ]);
+
+  // Tab configuration
+  const tabContent = useMemo(() => [
+    { 
+      title: 'Tableau', 
+      content: renderTable(filteredData) 
+    },
+    {
+      title: 'Vue Véhicule',
+      content: renderGanttView('Véhicule')
+    },
+    {
+      title: 'Vue Lieu',
+      content: renderGanttView('Lieu')
+    },
+    {
+      title: 'Vue Technicien',
+      content: renderGanttView('Technicien', true)
+    },
+    {
+      title: 'Paramètres',
+      content: renderSettings()
+    }
+  ], [filteredData, renderTable, renderGanttView, renderSettings]);
 
 //############################################################################################### suite dans la partie 6 ######################################################################################################
 
@@ -1206,151 +1245,7 @@ const CSVViewer: React.FC = () => {
     getUniqueColor
   ]);
 
-  const renderGanttView = useCallback((groupBy: string, showTechnicianInput: boolean = false) => (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        {renderDateSelector()}
-        {showTechnicianInput && renderTechnicianInput()}
-      </div>
-
-      <div className="space-y-6">
-        <div className="relative bg-white rounded-lg shadow-sm">
-          {renderGanttChart(groupBy)}
-        </div>
-        
-        {draggedTask && getDragMessage()}
-        
-        <div className="text-sm text-gray-500 italic space-y-1">
-          {showTechnicianInput && (
-            <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
-          )}
-          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
-          <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
-        </div>
-
-        {selectedDate && (
-          <div className="mt-8 border-t-2 border-gray-200 pt-8">
-            {renderFilterReset()}
-            <h3 className="text-lg font-semibold mb-4">
-              {selectedTask 
-                ? "Détails de l'opération sélectionnée"
-                : `Détails des opérations pour le ${formatDate(selectedDate)}`}
-            </h3>
-            {renderTable(filterDataForDate(selectedDate, selectedTask))}
-          </div>
-        )}
-      </div>
-    </div>
-  ), [
-    renderDateSelector,
-    renderTechnicianInput,
-    renderGanttChart,
-    getDragMessage,
-    renderFilterReset,
-    renderTable,
-    draggedTask,
-    selectedDate,
-    selectedTask,
-    filterDataForDate,
-    formatDate
-  ]);
-
-  // Tab configuration
-  const tabContent = useMemo(() => [
-    { 
-      title: 'Tableau', 
-      content: renderTable(filteredData) 
-    },
-    {
-      title: 'Vue Véhicule',
-      content: renderGanttView('Véhicule')
-    },
-    {
-      title: 'Vue Lieu',
-      content: renderGanttView('Lieu')
-    },
-    {
-      title: 'Vue Technicien',
-      content: renderGanttView('Technicien', true)
-    },
-    {
-      title: 'Paramètres',
-      content: renderSettings()
-    }
-  ], [filteredData, renderTable, renderGanttView, renderSettings]);
-
-// ############################################################################################## suite dans la partie 7 ######################################################################################################
-
-// File handling
-  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    parse(file, {
-      complete: (results: CSVResult) => {
-        const processedData = results.data.slice(1)
-          .filter((row: string[]) => row.some(cell => cell))
-          .map((row: string[]) => {
-            const updatedRow = [...row];
-            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
-
-            if (updatedRow[2] && updatedRow[4]) {
-              const startDate = new Date(updatedRow[2]);
-              const endDate = new Date(updatedRow[4]);
-              updatedRow[2] = startDate.toISOString().split('T')[0];
-              updatedRow[4] = endDate.toISOString().split('T')[0];
-            }
-            return updatedRow;
-          });
-
-        setData(processedData);
-        setHeaders(results.data[0]);
-
-        // Generate unique dates and technicians
-        const allDatesSet = new Set<string>();
-        const technicianSet = new Set<string>();
-
-        processedData.forEach((row: string[]) => {
-          if (row[2] && row[4]) {
-            const startDate = new Date(row[2]);
-            const endDate = new Date(row[4]);
-            
-            let currentDate = new Date(startDate);
-            while (currentDate <= endDate) {
-              allDatesSet.add(currentDate.toISOString().split('T')[0]);
-              currentDate.setDate(currentDate.getDate() + 1);
-            }
-          }
-          if (row[15]) {
-            technicianSet.add(row[15].trim());
-          }
-        });
-
-        const sortedDates = Array.from(allDatesSet).sort();
-        const sortedTechnicians = Array.from(technicianSet)
-          .filter(tech => tech && tech !== "Sans technicien")
-          .sort();
-
-        if (technicianSet.has("Sans technicien")) {
-          sortedTechnicians.push("Sans technicien");
-        }
-
-        setUniqueDates(sortedDates);
-        setAllTechnicians(sortedTechnicians);
-
-        const initialFilters: Record<string, string> = {};
-        results.data[0].forEach(header => {
-          initialFilters[header] = '';
-        });
-        setFilters(initialFilters);
-      },
-      error: (error: Error) => {
-        console.error('Error reading file:', error);
-      }
-    });
-  }, []);
-
-  // Final component render
+  // Final render
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
       <div className="mb-6 space-y-4">
@@ -1397,3 +1292,4 @@ const CSVViewer: React.FC = () => {
 };
 
 export default React.memo(CSVViewer);
+
