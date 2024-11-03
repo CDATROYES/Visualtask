@@ -163,6 +163,17 @@ const CSVViewer: React.FC = () => {
     }
   }, [getTimePercentage]);
 
+  // Data filtering - Placing this early as it's used by other functions
+  const filteredData = useMemo(() => 
+    data.filter(row => 
+      headers.every((header, index) => {
+        const filterValue = (filters[header] || '').toLowerCase();
+        const cellValue = (row[index] || '').toString().toLowerCase();
+        return !filterValue || cellValue.includes(filterValue);
+      })
+    )
+  , [data, headers, filters]);
+
   // Base handlers
   const handleInputChange = useCallback((header: string, value: string): void => {
     setEditedData(prev => ({
@@ -230,31 +241,7 @@ const CSVViewer: React.FC = () => {
     setEditedData({});
   }, [headers, editedData, getOperationId]);
 
-  // Task handlers
-  const handleTaskClick = useCallback((operationId: string): void => {
-    setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
-  }, []);
-
-  const handleAddTechnician = useCallback((): void => {
-    const trimmedTechnician = newTechnician.trim();
-    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
-      setAllTechnicians(prev => {
-        if (prev.includes(trimmedTechnician)) {
-          return prev;
-        }
-        const technicians = prev.filter(tech => tech !== "Sans technicien");
-        technicians.push(trimmedTechnician);
-        technicians.sort((a, b) => a.localeCompare(b));
-        if (prev.includes("Sans technicien")) {
-          technicians.push("Sans technicien");
-        }
-        return technicians;
-      });
-      setNewTechnician('');
-    }
-  }, [newTechnician]);
-
-  // File handlers
+  // Export handlers - Now can safely use filteredData
   const handleExportCSV = useCallback((): void => {
     const dataToExport = isFiltering ? filteredData : data;
     const csv = unparse({
@@ -274,16 +261,68 @@ const CSVViewer: React.FC = () => {
     window.URL.revokeObjectURL(url);
   }, [data, headers, isFiltering, filteredData, selectedDate]);
 
-  // Data filtering
-  const filteredData = useMemo(() => 
-    data.filter(row => 
-      headers.every((header, index) => {
-        const filterValue = (filters[header] || '').toLowerCase();
-        const cellValue = (row[index] || '').toString().toLowerCase();
-        return !filterValue || cellValue.includes(filterValue);
-      })
-    )
-  , [data, headers, filters]);
+  // Task handlers
+  const handleTaskClick = useCallback((operationId: string): void => {
+    setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
+  }, []);
+
+  // Technician handlers
+  const handleAddTechnician = useCallback((): void => {
+    const trimmedTechnician = newTechnician.trim();
+    if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
+      setAllTechnicians(prev => {
+        if (prev.includes(trimmedTechnician)) {
+          return prev;
+        }
+        const technicians = prev.filter(tech => tech !== "Sans technicien");
+        technicians.push(trimmedTechnician);
+        technicians.sort((a, b) => a.localeCompare(b));
+        if (prev.includes("Sans technicien")) {
+          technicians.push("Sans technicien");
+        }
+        return technicians;
+      });
+      setNewTechnician('');
+    }
+  }, [newTechnician]);
+
+  // Percentage calculations
+  const calculateDayPercentages = useCallback((
+    task: string[], 
+    selectedDate: string
+  ): { dayStartPercentage: number; dayEndPercentage: number } => {
+    if (!task[2] || !task[4]) {
+      const hasTime = Boolean(task[3] && task[5]);
+      return { 
+        dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+        dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.5
+      };
+    }
+    
+    if (isSameDay(task[2], task[4])) {
+      return {
+        dayStartPercentage: getTimePercentage(task[3]),
+        dayEndPercentage: getTimePercentage(task[5])
+      };
+    }
+    
+    if (isSameDay(selectedDate, task[2])) {
+      return {
+        dayStartPercentage: getTimePercentage(task[3]),
+        dayEndPercentage: 100
+      };
+    } else if (isSameDay(selectedDate, task[4])) {
+      return {
+        dayStartPercentage: 0,
+        dayEndPercentage: getTimePercentage(task[5])
+      };
+    } else {
+      return {
+        dayStartPercentage: 0,
+        dayEndPercentage: 100
+      };
+    }
+  }, [getTimePercentage, isSameDay]);
 
 //############################################################################################### suite dans la partie 3 ######################################################################################################
 
