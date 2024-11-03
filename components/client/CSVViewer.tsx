@@ -1411,3 +1411,74 @@ return (
     )}
   </div>
 );
+ }, [
+    selectedDate,
+    filterDataForDate,
+    groupDataByType,
+    getTimePercentage,
+    calculateDuration,
+    getOperationId,
+    calculateDayPercentages,
+    detectOverlaps,
+    renderTimeHeader,
+    handleDragOver,
+    handleDragEnter,
+    handleDragLeave,
+    handleDrop,
+    handleDragStart,
+    handleDragEnd,
+    handleTaskClick,
+    renderGanttTaskContent,
+    dropZoneActive,
+    selectedTask,
+    isSameDay,
+    getUniqueColor
+  ]);
+
+  // Final render
+  return (
+    <div className="container mx-auto p-4 min-h-screen bg-gray-50">
+      <div className="mb-6 space-y-4">
+        {/* File upload section */}
+        <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+          <input 
+            type="file" 
+            onChange={handleFileUpload} 
+            accept=".csv" 
+            className="flex-1"
+          />
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+                     transition-colors duration-200 flex items-center gap-2"
+          >
+            <Edit2 className="h-4 w-4" />
+            Nouvelle opération
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
+                     transition-colors duration-200 flex items-center gap-2"
+          >
+            Exporter CSV
+          </button>
+        </div>
+
+        {/* Tabs */}
+        {renderTabButtons()}
+      </div>
+
+      {/* Main content */}
+      <Card>
+        <CardContent>
+          {tabContent[activeTab].content}
+        </CardContent>
+      </Card>
+
+      {/* Drag and drop message */}
+      {draggedTask && getDragMessage()}
+    </div>
+  );
+};
+
+export default React.memo(CSVViewer);
