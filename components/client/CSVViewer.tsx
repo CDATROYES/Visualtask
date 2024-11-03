@@ -1411,7 +1411,7 @@ return (
     )}
   </div>
 );
- }, [
+ [
     selectedDate,
     filterDataForDate,
     groupDataByType,
