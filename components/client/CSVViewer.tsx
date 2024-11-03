@@ -1283,129 +1283,131 @@ const CSVViewer: React.FC = () => {
   ];
 
   // Rendu principal du composant
-  return (
-    <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
-      <input 
-        type="file" 
-        onChange={handleFileUpload} 
-        accept=".csv" 
-        className="flex-1"
-      />
-      <button
-        onClick={() => setIsCreateModalOpen(true)}
-        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
-                  transition-colors duration-200 flex items-center gap-2"
-      >
-        <Edit2 className="h-4 w-4" />
-        Nouvelle opération
-      </button>
-      <button
-        onClick={handleExportCSV}
-        className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
-                  transition-colors duration-200 flex items-center gap-2"
-      >
-        Exporter CSV
-      </button>
-    </div>
-
-        {/* Onglets */}
-        {renderTabButtons()}
-      </div>
-
-      {/* Contenu principal */}
-      <Card>
-        <CardContent>
-          {tabContent[activeTab].content}
-        </CardContent>
-      </Card>
-	  {isCreateModalOpen && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Créer une nouvelle opération</h2>
+  // Rendu principal du composant
+return (
+  <div className="container mx-auto p-4 min-h-screen bg-gray-50">
+    <div className="mb-6 space-y-4">
+      {/* Section upload de fichier */}
+      <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+        <input 
+          type="file" 
+          onChange={handleFileUpload} 
+          accept=".csv" 
+          className="flex-1"
+        />
         <button
-          onClick={() => {
-            setNewOperation({});
-            setIsCreateModalOpen(false);
-          }}
-          className="text-gray-500 hover:text-gray-700"
+          onClick={() => setIsCreateModalOpen(true)}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 
+                   transition-colors duration-200 flex items-center gap-2"
         >
-          <X className="h-5 w-5" />
+          <Edit2 className="h-4 w-4" />
+          Nouvelle opération
+        </button>
+        <button
+          onClick={handleExportCSV}
+          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 
+                   transition-colors duration-200 flex items-center gap-2"
+        >
+          Exporter CSV
         </button>
       </div>
-      
-      <div className="grid grid-cols-2 gap-4">
-        {headers.map((header, index) => {
-          if (!getVisibleColumns().includes(index)) return null;
+
+      {/* Onglets */}
+      {renderTabButtons()}
+    </div>
+
+    {/* Contenu principal */}
+    <Card>
+      <CardContent>
+        {tabContent[activeTab].content}
+      </CardContent>
+    </Card>
+
+    {/* Modal de création */}
+    {isCreateModalOpen && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold">Créer une nouvelle opération</h2>
+            <button
+              onClick={() => {
+                setNewOperation({});
+                setIsCreateModalOpen(false);
+              }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
           
-          return (
-            <div key={header} className="flex flex-col">
-              <label className="text-sm text-gray-600 mb-1">
-                {header}
-              </label>
-              {header.toLowerCase().includes('date') ? (
-                <input
-                  type="date"
-                  value={newOperation[header] || ''}
-                  onChange={(e) => setNewOperation(prev => ({
-                    ...prev,
-                    [header]: e.target.value
-                  }))}
-                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-                />
-              ) : header === headers[15] ? (
-                <select
-                  value={newOperation[header] || ''}
-                  onChange={(e) => setNewOperation(prev => ({
-                    ...prev,
-                    [header]: e.target.value
-                  }))}
-                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Sélectionner un technicien</option>
-                  {allTechnicians.map(tech => (
-                    <option key={tech} value={tech}>{tech}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={newOperation[header] || ''}
-                  onChange={(e) => setNewOperation(prev => ({
-                    ...prev,
-                    [header]: e.target.value
-                  }))}
-                  className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
+          <div className="grid grid-cols-2 gap-4">
+            {headers.map((header, index) => {
+              if (!getVisibleColumns().includes(index)) return null;
+              
+              return (
+                <div key={header} className="flex flex-col">
+                  <label className="text-sm text-gray-600 mb-1">
+                    {header}
+                  </label>
+                  {header.toLowerCase().includes('date') ? (
+                    <input
+                      type="date"
+                      value={newOperation[header] || ''}
+                      onChange={(e) => setNewOperation(prev => ({
+                        ...prev,
+                        [header]: e.target.value
+                      }))}
+                      className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : header === headers[15] ? (
+                    <select
+                      value={newOperation[header] || ''}
+                      onChange={(e) => setNewOperation(prev => ({
+                        ...prev,
+                        [header]: e.target.value
+                      }))}
+                      className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Sélectionner un technicien</option>
+                      {allTechnicians.map(tech => (
+                        <option key={tech} value={tech}>{tech}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={newOperation[header] || ''}
+                      onChange={(e) => setNewOperation(prev => ({
+                        ...prev,
+                        [header]: e.target.value
+                      }))}
+                      className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-      <div className="flex justify-end gap-2 mt-6">
-        <button
-          onClick={() => {
-            setNewOperation({});
-            setIsCreateModalOpen(false);
-          }}
-          className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-        >
-          Annuler
-        </button>
-        <button
-          onClick={handleCreateOperation}
-          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          Créer
-        </button>
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={() => {
+                setNewOperation({});
+                setIsCreateModalOpen(false);
+              }}
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleCreateOperation}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Créer
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+    )}
   </div>
-)}
-    </div>
-  );
-};
-
-// Export du composant mémorisé
-export default React.memo(CSVViewer);
+);
