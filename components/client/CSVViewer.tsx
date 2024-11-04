@@ -916,37 +916,37 @@ const CSVViewer: React.FC = () => {
     </select>
   );
 const renderTechnicianInput = (): React.ReactNode => (
-  <div className="flex flex-wrap gap-2 items-center">
-    <div className="flex-1 min-w-[200px]">
-      <Input
-        type="text"
-        value={newTechnician}
-        onChange={(e) => setNewTechnician(e.target.value)}
-        placeholder="Nouveau technicien"
-        className="w-full"
-      />
-    </div>
+  <div className="flex gap-2 w-full items-center">
+    <Input
+      type="text"
+      value={newTechnician}
+      onChange={(e) => setNewTechnician(e.target.value)}
+      placeholder="Nouveau technicien"
+      className="flex-1"
+    />
     <Button
       onClick={() => {
-        const trimmedTechnician = newTechnician.trim();
-        if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
-          setAllTechnicians(prev => {
-            if (prev.includes(trimmedTechnician)) {
-              return prev;
+        if (newTechnician.trim() && newTechnician.trim().toLowerCase() !== 'sans technicien') {
+          // Copier la liste actuelle
+          const updatedTechnicians = [...allTechnicians];
+          // Retirer "Sans technicien" temporairement s'il existe
+          const hasSansTechnicien = updatedTechnicians.includes("Sans technicien");
+          const filteredTechnicians = updatedTechnicians.filter(tech => tech !== "Sans technicien");
+          // Ajouter le nouveau technicien s'il n'existe pas déjà
+          if (!filteredTechnicians.includes(newTechnician.trim())) {
+            filteredTechnicians.push(newTechnician.trim());
+            // Trier la liste
+            filteredTechnicians.sort((a, b) => a.localeCompare(b));
+            // Remettre "Sans technicien" à la fin si nécessaire
+            if (hasSansTechnicien) {
+              filteredTechnicians.push("Sans technicien");
             }
-            const technicians = prev.filter(tech => tech !== "Sans technicien");
-            technicians.push(trimmedTechnician);
-            technicians.sort((a, b) => a.localeCompare(b));
-            if (prev.includes("Sans technicien")) {
-              technicians.push("Sans technicien");
-            }
-            return technicians;
-          });
-          setNewTechnician('');
+            // Mettre à jour l'état
+            setAllTechnicians(filteredTechnicians);
+            setNewTechnician('');
+          }
         }
       }}
-      variant="default"  // Ajout de cette ligne
-      className="bg-blue-500 hover:bg-blue-600 text-white"  // Ajout de cette ligne
       disabled={!newTechnician.trim() || newTechnician.trim().toLowerCase() === 'sans technicien'}
     >
       Ajouter Technicien
