@@ -1,5 +1,5 @@
 'use client';
-
+import * as XLSX from 'xlsx';
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
 import { Edit2, Save, X, Settings, PlusCircle } from 'lucide-react';
@@ -973,42 +973,49 @@ const renderTechnicianInput = (): React.ReactNode => (
     </div>
   );
 };
-  const renderTopActions = (): React.ReactNode => (
-    <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
-      <input 
-        type="file" 
-        onChange={handleFileUpload} 
-        accept=".csv" 
-        className="flex-1"
-      />
-      <Button
-        onClick={() => setIsNewOperationDialogOpen(true)}
-        className="gap-2"
-      >
-        <PlusCircle className="h-4 w-4" />
-        Nouvelle opération
-      </Button>
-      <Button
-        onClick={handleExportCSV}
-        className="gap-2"
-        variant="outline"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-        Exporter CSV
-      </Button>
-    </div>
-  );
-  const handleExportCSV = (): void => {
-    const dataToExport = isFiltering ? filteredData : data;
-    const csv = unparse({
-      fields: headers,
-      data: dataToExport
-    });
-    const fileName = `export_${selectedDate || new Date().toISOString().split('T')[0]}.csv`;
-    downloadCSV(csv, fileName);
-  };
+const renderTopActions = (): React.ReactNode => (
+  <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+    <input 
+      type="file" 
+      onChange={handleFileUpload} 
+      accept=".csv" 
+      className="flex-1"
+    />
+    <Button
+      onClick={() => setIsNewOperationDialogOpen(true)}
+      className="gap-2"
+    >
+      <PlusCircle className="h-4 w-4" />
+      Nouvelle opération
+    </Button>
+    <Button
+      onClick={handleExportExcel}
+      className="gap-2"
+      variant="outline"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+      </svg>
+      Exporter Excel
+    </Button>
+  </div>
+);
+const handleExportExcel = (): void => {
+  const dataToExport = isFiltering ? filteredData : data;
+  
+  // Créer un workbook
+  const wb = XLSX.utils.book_new();
+  
+  // Convertir les données en format worksheet
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataToExport]);
+  
+  // Ajouter la feuille au workbook
+  XLSX.utils.book_append_sheet(wb, ws, "Operations");
+  
+  // Générer le fichier Excel
+  const fileName = `operations_${selectedDate || new Date().toISOString().split('T')[0]}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+};
 
   const downloadCSV = (content: string, fileName: string): void => {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
