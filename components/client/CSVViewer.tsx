@@ -432,7 +432,6 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
       case 'Véhicule':
         groupIndex = 0;
         labelIndex = 1;
-        // Modifié : on utilise filteredDataForDate au lieu de data pour les véhicules
         groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
           .filter(Boolean)
           .sort();
@@ -440,9 +439,17 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
       case 'Lieu':
         groupIndex = 10;
         labelIndex = 1;
-        groups = Array.from(new Set(data.map(row => row[groupIndex])))
-          .filter(Boolean)
+        // Récupérer tous les lieux uniques
+        const allLocations = Array.from(new Set(data
+          .map(row => row[groupIndex])
+          .filter(Boolean)))
           .sort();
+        
+        groups = allLocations;
+        // Ajouter "Sans emplacement" à la fin si nécessaire
+        if (data.some(row => !row[groupIndex] || row[groupIndex].trim() === '')) {
+          groups.push("Sans emplacement");
+        }
         break;
       case 'Technicien':
         groupIndex = 15;
@@ -575,18 +582,22 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
       document.body.removeChild(ghostElement);
     });
   };
-  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
-    setData(prevData => {
-      return prevData.map(row => {
-        if (getOperationId(row) === operationId) {
-          const newRow = [...row];
-          newRow[15] = newTechnician;
-          return newRow;
+const updateAssignment = useCallback((operationId: string, newAssignment: string, type: 'technicien' | 'lieu'): void => {
+  setData(prevData => {
+    return prevData.map(row => {
+      if (getOperationId(row) === operationId) {
+        const newRow = [...row];
+        if (type === 'technicien') {
+          newRow[15] = newAssignment;
+        } else if (type === 'lieu') {
+          newRow[10] = newAssignment === "Sans emplacement" ? "" : newAssignment;
         }
-        return row;
-      });
+        return newRow;
+      }
+      return row;
     });
-  }, []);
+  });
+}, []);
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -612,56 +623,65 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
   }, []);
 
   const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
-    e.preventDefault();
-    e.stopPropagation();
+  e.preventDefault();
+  e.stopPropagation();
 
-    if (!draggedTask || !draggedTask.operationId) {
-      setDropZoneActive(null);
-      return;
-    }
+  if (!draggedTask || !draggedTask.operationId) {
+    setDropZoneActive(null);
+    return;
+  }
 
-    const { operationId, task: draggedTaskData, startDate, endDate, originalTechnician } = draggedTask;
+  const { operationId, task: draggedTaskData, startDate, endDate, originalTechnician } = draggedTask;
 
-    if (targetGroup === "Non affectées") {
+  if (targetGroup === "Non affectées") {
+    setDropZoneActive(null);
+    setDraggedTask(null);
+    return;
+  }
+
+  const isUnassignedTask = !startDate || !endDate;
+
+  if (isUnassignedTask) {
+    const updatedTask = assignDateToTask(draggedTaskData, selectedDate);
+    updatedTask[15] = targetGroup;
+
+    setData(prevData => {
+      return prevData.map(row => 
+        getOperationId(row) === operationId ? updatedTask : row
+      );
+    });
+  } else {
+    const selectedDateObj = new Date(selectedDate);
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+
+    if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
+      console.log("Impossible de déplacer une tâche en dehors de sa période");
       setDropZoneActive(null);
       setDraggedTask(null);
       return;
     }
 
-    const isUnassignedTask = !startDate || !endDate;
-
-    if (isUnassignedTask) {
-      const updatedTask = assignDateToTask(draggedTaskData, selectedDate);
-      updatedTask[15] = targetGroup;
-
-      setData(prevData => {
-        return prevData.map(row => 
-          getOperationId(row) === operationId ? updatedTask : row
-        );
-      });
-    } else {
-      const selectedDateObj = new Date(selectedDate);
-      const startDateObj = new Date(startDate);
-      const endDateObj = new Date(endDate);
-
-      if (selectedDateObj < startDateObj || selectedDateObj > endDateObj) {
-        console.log("Impossible de déplacer une tâche en dehors de sa période");
-        setDropZoneActive(null);
-        setDraggedTask(null);
-        return;
-      }
-
+    // Détermine si on modifie le technicien ou le lieu
+    if (activeTab === 3) { // Vue Technicien
       if (originalTechnician === targetGroup) {
         setDropZoneActive(null);
         return;
       }
-
-      updateAssignment(operationId, targetGroup);
+      updateAssignment(operationId, targetGroup, 'technicien');
+    } else if (activeTab === 2) { // Vue Lieu
+      const originalLocation = draggedTaskData[10] || "Sans emplacement";
+      if (originalLocation === targetGroup) {
+        setDropZoneActive(null);
+        return;
+      }
+      updateAssignment(operationId, targetGroup, 'lieu');
     }
+  }
 
-    setDropZoneActive(null);
-    setDraggedTask(null);
-  }, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
+  setDropZoneActive(null);
+  setDraggedTask(null);
+}, [draggedTask, selectedDate, updateAssignment, assignDateToTask, activeTab]);
 
   // Gestion des fichiers CSV
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
