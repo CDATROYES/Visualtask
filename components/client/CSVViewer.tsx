@@ -79,6 +79,18 @@ interface NewOperation {
   technicien: string;
 }
 
+interface DraggedTaskData {
+  task: string[];
+  date: string;
+  operationId: string;
+  startDate: string | null;
+  endDate: string | null;
+  originalTechnician: string;
+  originalLocation: string;  // Ajout de cette ligne
+  startPercentage: number;
+  duration: number;
+}
+
 // État initial pour une nouvelle opération
 const initialNewOperation: NewOperation = {
   vehicule: '',
@@ -546,24 +558,25 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
     });
   });
   // Gestion du drag & drop
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
-    e.stopPropagation();
-    const taskData: DraggedTaskData = {
-      task: task.task,
-      date: selectedDate,
-      operationId: getOperationId(task.task),
-      startDate: task.task[2] || null,
-      endDate: task.task[4] || null,
-      originalTechnician: task.task[15],
-      startPercentage: task.isUnassigned && task.task[3] && task.task[5] 
-        ? getTimePercentage(task.task[3])
-        : task.dayStartPercentage ?? task.startPercentage,
-      duration: task.isUnassigned && task.task[3] && task.task[5]
-        ? calculateDuration(task.task[3], task.task[5])
-        : task.dayEndPercentage 
-          ? task.dayEndPercentage - (task.dayStartPercentage ?? 0)
-          : task.duration
-    };
+const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: TaskData): void => {
+  e.stopPropagation();
+  const taskData: DraggedTaskData = {
+    task: task.task,
+    date: selectedDate,
+    operationId: getOperationId(task.task),
+    startDate: task.task[2] || null,
+    endDate: task.task[4] || null,
+    originalTechnician: task.task[15],
+    originalLocation: task.task[10] || '',  // Ajout de cette ligne
+    startPercentage: task.isUnassigned && task.task[3] && task.task[5] 
+      ? getTimePercentage(task.task[3])
+      : task.dayStartPercentage ?? task.startPercentage,
+    duration: task.isUnassigned && task.task[3] && task.task[5]
+      ? calculateDuration(task.task[3], task.task[5])
+      : task.dayEndPercentage 
+        ? task.dayEndPercentage - (task.dayStartPercentage ?? 0)
+        : task.duration
+  };
 
     setDraggedTask(taskData);
 
@@ -622,7 +635,7 @@ const updateAssignment = useCallback((operationId: string, newAssignment: string
     setDropZoneActive(null);
   }, []);
 
-  const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
+const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
   e.preventDefault();
   e.stopPropagation();
 
@@ -631,7 +644,7 @@ const updateAssignment = useCallback((operationId: string, newAssignment: string
     return;
   }
 
-  const { operationId, task: draggedTaskData, startDate, endDate, originalTechnician } = draggedTask;
+  const { operationId, task: draggedTaskData, startDate, endDate, originalLocation } = draggedTask;
 
   if (targetGroup === "Non affectées") {
     setDropZoneActive(null);
@@ -643,13 +656,23 @@ const updateAssignment = useCallback((operationId: string, newAssignment: string
 
   if (isUnassignedTask) {
     const updatedTask = assignDateToTask(draggedTaskData, selectedDate);
-    updatedTask[15] = targetGroup;
+    updatedTask[10] = targetGroup === "Sans emplacement" ? "" : targetGroup;
 
-    setData(prevData => {
-      return prevData.map(row => 
-        getOperationId(row) === operationId ? updatedTask : row
-      );
+   setData(prevData => {
+      return prevData.map(row => {
+        if (getOperationId(row) === operationId) {
+          const newRow = [...row];
+          newRow[10] = targetGroup === "Sans emplacement" ? "" : targetGroup; // Colonne de l'emplacement
+          return newRow;
+        }
+        return row;
+      });
     });
+  }
+
+  setDropZoneActive(null);
+  setDraggedTask(null);
+}, [draggedTask, selectedDate, assignDateToTask]);
   } else {
     const selectedDateObj = new Date(selectedDate);
     const startDateObj = new Date(startDate);
@@ -659,6 +682,12 @@ const updateAssignment = useCallback((operationId: string, newAssignment: string
       console.log("Impossible de déplacer une tâche en dehors de sa période");
       setDropZoneActive(null);
       setDraggedTask(null);
+      return;
+    }
+
+    const currentLocation = originalLocation || "Sans emplacement";
+    if (currentLocation === targetGroup) {
+      setDropZoneActive(null);
       return;
     }
 
