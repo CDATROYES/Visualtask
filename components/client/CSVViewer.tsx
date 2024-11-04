@@ -417,7 +417,7 @@ const CSVViewer: React.FC = () => {
     }
   }, [data]);
 
-  const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
+const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
     let groupIndex: number;
     let labelIndex: number;
     let groups: string[] = [];
@@ -432,7 +432,8 @@ const CSVViewer: React.FC = () => {
       case 'Véhicule':
         groupIndex = 0;
         labelIndex = 1;
-        groups = Array.from(new Set(data.map(row => row[groupIndex])))
+        // Modifié : on utilise filteredDataForDate au lieu de data pour les véhicules
+        groups = Array.from(new Set(filteredDataForDate.map(row => row[groupIndex])))
           .filter(Boolean)
           .sort();
         break;
