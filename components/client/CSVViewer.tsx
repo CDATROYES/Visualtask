@@ -496,6 +496,20 @@ const CSVViewer: React.FC = () => {
     setEditedData({});
   };
 
+  // Fonctions de mise à jour des assignations
+  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
+    setData(prevData => {
+      return prevData.map(row => {
+        if (getOperationId(row) === operationId) {
+          const newRow = [...row];
+          newRow[15] = newTechnician;
+          return newRow;
+        }
+        return row;
+      });
+    });
+  }, []);
+
   // Fonctions de gestion des colonnes
   const handleFilterChange = (header: string, value: string): void => {
     setFilters(prev => ({
@@ -651,81 +665,9 @@ const CSVViewer: React.FC = () => {
     setDraggedTask(null);
   }, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
 
-  // Gestion des fichiers CSV
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    parse(file, {
-      complete: (results: CSVResult) => {
-        const processedData = results.data.slice(1)
-          .filter((row: string[]) => row.some(cell => cell))
-          .map((row: string[]) => {
-            const updatedRow = [...row];
-            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
-
-            if (updatedRow[2] && updatedRow[4]) {
-              const startDate = new Date(updatedRow[2]);
-              const endDate = new Date(updatedRow[4]);
-              updatedRow[2] = startDate.toISOString().split('T')[0];
-              updatedRow[4] = endDate.toISOString().split('T')[0];
-            }
-            return updatedRow;
-          });
-
-        setData(processedData);
-        setHeaders(results.data[0]);
-
-        // Mise à jour des dates et des techniciens
-        const allDates = new Set<string>();
-        const technicianSet = new Set<string>();
-
-        processedData.forEach((row: string[]) => {
-          if (row[2] && row[4]) {
-            const startDate = new Date(row[2]);
-            const endDate = new Date(row[4]);
-            const dates = generateDateRange(startDate, endDate);
-            dates.forEach(date => allDates.add(date));
-          }
-          if (row[15]) {
-            technicianSet.add(row[15].trim());
-          }
-        });
-
-        setUniqueDates(Array.from(allDates).sort());
-        
-        const sortedTechnicians = Array.from(technicianSet)
-          .filter(tech => tech && tech !== "Sans technicien")
-          .sort((a, b) => a.localeCompare(b));
-
-        if (technicianSet.has("Sans technicien")) {
-          sortedTechnicians.push("Sans technicien");
-        }
-
-        setAllTechnicians(sortedTechnicians);
-      },
-      error: (error: Error) => {
-        console.error('Erreur lors de la lecture du fichier:', error);
-      }
-    });
-  };
-
   const handleTaskClick = (operationId: string): void => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
-
-  const updateAssignment = useCallback((operationId: string, newTechnician: string): void => {
-    setData(prevData => {
-      return prevData.map(row => {
-        if (getOperationId(row) === operationId) {
-          const newRow = [...row];
-          newRow[15] = newTechnician;
-          return newRow;
-        }
-        return row;
-      });
-    });
-  }, []);
   // Composants de rendu de base
   const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
