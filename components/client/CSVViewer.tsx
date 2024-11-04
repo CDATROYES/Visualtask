@@ -635,8 +635,6 @@ const updateAssignment = useCallback((operationId: string, newAssignment: string
     setDropZoneActive(null);
   }, []);
 
-Fixed handleDrop function
-
 const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
   e.preventDefault();
   e.stopPropagation();
