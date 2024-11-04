@@ -1001,7 +1001,30 @@ const renderTopActions = (): React.ReactNode => (
   </div>
 );
 const handleExportExcel = (): void => {
-  const dataToExport = isFiltering ? filteredData : data;
+  const dataToExport = (isFiltering ? filteredData : data).map(row => {
+    // Créer une copie de la ligne pour ne pas modifier les données originales
+    const formattedRow = [...row];
+    
+    // Formatter les dates (colonnes 2 et 4 sont les dates de début et fin)
+    if (row[2]) { // Date de début
+      const date = new Date(row[2]);
+      formattedRow[2] = date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    }
+    if (row[4]) { // Date de fin
+      const date = new Date(row[4]);
+      formattedRow[4] = date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    }
+    
+    return formattedRow;
+  });
   
   // Créer un workbook
   const wb = XLSX.utils.book_new();
@@ -1009,6 +1032,16 @@ const handleExportExcel = (): void => {
   // Convertir les données en format worksheet
   const ws = XLSX.utils.aoa_to_sheet([headers, ...dataToExport]);
   
+  // Définir le format des colonnes de dates
+  ws['!cols'] = headers.map((_, index) => {
+    // Colonnes de dates (2 et 4)
+    if (index === 2 || index === 4) {
+      return { wch: 12 }; // Largeur pour le format dd/mm/yyyy
+    }
+    // Autres colonnes
+    return { wch: 15 }; // Largeur par défaut
+  });
+
   // Ajouter la feuille au workbook
   XLSX.utils.book_append_sheet(wb, ws, "Operations");
   
