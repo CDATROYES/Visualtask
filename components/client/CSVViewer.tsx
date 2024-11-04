@@ -1228,6 +1228,11 @@ const handleExportExcel = (): void => {
           <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
             <thead>
               <tr>
+                {/* Colonne d'actions en premier */}
+                <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
+                  Actions
+                </th>
+                {/* Autres colonnes ensuite */}
                 {headers.map((header, index) => {
                   if (!visibleColumns.includes(index)) return null;
                   
@@ -1251,9 +1256,6 @@ const handleExportExcel = (): void => {
                     </th>
                   );
                 })}
-                <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
-                  Actions
-                </th>
               </tr>
             </thead>
             <tbody className="bg-white">
@@ -1272,20 +1274,7 @@ const handleExportExcel = (): void => {
                       hover:bg-blue-50
                     `}
                   >
-                    {row.map((cell, cellIndex) => {
-                      if (!visibleColumns.includes(cellIndex)) return null;
-                      
-                      return (
-                        <td
-                          key={cellIndex}
-                          className="border border-gray-300 py-2 px-4 text-sm"
-                        >
-                          <div className="truncate">
-                            {renderCell(row, cell, headers[cellIndex], cellIndex)}
-                          </div>
-                        </td>
-                      );
-                    })}
+                    {/* Cellule d'actions en premier */}
                     <td className="border border-gray-300 py-2 px-4">
                       <div className="flex justify-center gap-2">
                         {isEditing ? (
@@ -1316,6 +1305,21 @@ const handleExportExcel = (): void => {
                         )}
                       </div>
                     </td>
+                    {/* Autres cellules ensuite */}
+                    {row.map((cell, cellIndex) => {
+                      if (!visibleColumns.includes(cellIndex)) return null;
+                      
+                      return (
+                        <td
+                          key={cellIndex}
+                          className="border border-gray-300 py-2 px-4 text-sm"
+                        >
+                          <div className="truncate">
+                            {renderCell(row, cell, headers[cellIndex], cellIndex)}
+                          </div>
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
