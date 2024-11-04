@@ -915,7 +915,39 @@ const CSVViewer: React.FC = () => {
       ))}
     </select>
   );
-
+  const renderTechnicianInput = (): React.ReactNode => (
+    <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex-1 min-w-[200px]">
+        <Input
+          type="text"
+          value={newTechnician}
+          onChange={(e) => setNewTechnician(e.target.value)}
+          placeholder="Nouveau technicien"
+        />
+      </div>
+      <Button
+        onClick={() => {
+          if (newTechnician.trim() && !allTechnicians.includes(newTechnician.trim())) {
+            setAllTechnicians(prev => {
+              const technicians = prev.filter(tech => tech !== "Sans technicien");
+              technicians.push(newTechnician.trim());
+              technicians.sort((a, b) => a.localeCompare(b));
+              if (prev.includes("Sans technicien")) {
+                technicians.push("Sans technicien");
+              }
+              return technicians;
+            });
+            setNewTechnician('');
+          }
+        }}
+        disabled={!newTechnician.trim() || newTechnician.trim().toLowerCase() === 'sans technicien'}
+        title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
+          "Impossible d'ajouter 'Sans technicien'" : ''}
+      >
+        Ajouter Technicien
+      </Button>
+    </div>
+  );
   const renderTopActions = (): React.ReactNode => (
     <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
       <input 
