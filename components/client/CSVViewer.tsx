@@ -635,6 +635,8 @@ const updateAssignment = useCallback((operationId: string, newAssignment: string
     setDropZoneActive(null);
   }, []);
 
+Fixed handleDrop function
+
 const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivElement>): void => {
   e.preventDefault();
   e.stopPropagation();
@@ -644,7 +646,7 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
     return;
   }
 
-  const { operationId, task: draggedTaskData, startDate, endDate, originalLocation } = draggedTask;
+  const { operationId, task: draggedTaskData, startDate, endDate, originalLocation, originalTechnician } = draggedTask;
 
   if (targetGroup === "Non affectées") {
     setDropZoneActive(null);
@@ -652,28 +654,21 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
     return;
   }
 
-  const isUnassignedTask = !startDate || !endDate;
-
-  if (isUnassignedTask) {
+  // Cas des tâches non assignées
+  if (!startDate || !endDate) {
     const updatedTask = assignDateToTask(draggedTaskData, selectedDate);
     updatedTask[10] = targetGroup === "Sans emplacement" ? "" : targetGroup;
 
-   setData(prevData => {
-      return prevData.map(row => {
-        if (getOperationId(row) === operationId) {
-          const newRow = [...row];
-          newRow[10] = targetGroup === "Sans emplacement" ? "" : targetGroup; // Colonne de l'emplacement
-          return newRow;
-        }
-        return row;
-      });
-    });
-  }
-
-  setDropZoneActive(null);
-  setDraggedTask(null);
-}, [draggedTask, selectedDate, assignDateToTask]);
-  } else {
+    setData(prevData => 
+      prevData.map(row => 
+        getOperationId(row) === operationId 
+          ? updatedTask
+          : row
+      )
+    );
+  } 
+  // Cas des tâches déjà assignées
+  else {
     const selectedDateObj = new Date(selectedDate);
     const startDateObj = new Date(startDate);
     const endDateObj = new Date(endDate);
@@ -685,12 +680,6 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
       return;
     }
 
-    const currentLocation = originalLocation || "Sans emplacement";
-    if (currentLocation === targetGroup) {
-      setDropZoneActive(null);
-      return;
-    }
-
     // Détermine si on modifie le technicien ou le lieu
     if (activeTab === 3) { // Vue Technicien
       if (originalTechnician === targetGroup) {
@@ -699,8 +688,8 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
       }
       updateAssignment(operationId, targetGroup, 'technicien');
     } else if (activeTab === 2) { // Vue Lieu
-      const originalLocation = draggedTaskData[10] || "Sans emplacement";
-      if (originalLocation === targetGroup) {
+      const currentLocation = originalLocation || "Sans emplacement";
+      if (currentLocation === targetGroup) {
         setDropZoneActive(null);
         return;
       }
@@ -710,7 +699,7 @@ const handleDrop = useCallback((targetGroup: string, e: React.DragEvent<HTMLDivE
 
   setDropZoneActive(null);
   setDraggedTask(null);
-}, [draggedTask, selectedDate, updateAssignment, assignDateToTask, activeTab]);
+}, [draggedTask, selectedDate, activeTab, updateAssignment, assignDateToTask]);
 
   // Gestion des fichiers CSV
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
