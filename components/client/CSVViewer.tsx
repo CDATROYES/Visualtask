@@ -915,39 +915,44 @@ const CSVViewer: React.FC = () => {
       ))}
     </select>
   );
-  const renderTechnicianInput = (): React.ReactNode => (
-    <div className="flex flex-wrap gap-2 items-center">
-      <div className="flex-1 min-w-[200px]">
-        <Input
-          type="text"
-          value={newTechnician}
-          onChange={(e) => setNewTechnician(e.target.value)}
-          placeholder="Nouveau technicien"
-        />
-      </div>
-      <Button
-        onClick={() => {
-          if (newTechnician.trim() && !allTechnicians.includes(newTechnician.trim())) {
-            setAllTechnicians(prev => {
-              const technicians = prev.filter(tech => tech !== "Sans technicien");
-              technicians.push(newTechnician.trim());
-              technicians.sort((a, b) => a.localeCompare(b));
-              if (prev.includes("Sans technicien")) {
-                technicians.push("Sans technicien");
-              }
-              return technicians;
-            });
-            setNewTechnician('');
-          }
-        }}
-        disabled={!newTechnician.trim() || newTechnician.trim().toLowerCase() === 'sans technicien'}
-        title={newTechnician.trim().toLowerCase() === 'sans technicien' ? 
-          "Impossible d'ajouter 'Sans technicien'" : ''}
-      >
-        Ajouter Technicien
-      </Button>
+const renderTechnicianInput = (): React.ReactNode => (
+  <div className="flex flex-wrap gap-2 items-center">
+    <div className="flex-1 min-w-[200px]">
+      <Input
+        type="text"
+        value={newTechnician}
+        onChange={(e) => setNewTechnician(e.target.value)}
+        placeholder="Nouveau technicien"
+        className="w-full"
+      />
     </div>
-  );
+    <Button
+      onClick={() => {
+        const trimmedTechnician = newTechnician.trim();
+        if (trimmedTechnician && trimmedTechnician.toLowerCase() !== 'sans technicien') {
+          setAllTechnicians(prev => {
+            if (prev.includes(trimmedTechnician)) {
+              return prev;
+            }
+            const technicians = prev.filter(tech => tech !== "Sans technicien");
+            technicians.push(trimmedTechnician);
+            technicians.sort((a, b) => a.localeCompare(b));
+            if (prev.includes("Sans technicien")) {
+              technicians.push("Sans technicien");
+            }
+            return technicians;
+          });
+          setNewTechnician('');
+        }
+      }}
+      variant="default"  // Ajout de cette ligne
+      className="bg-blue-500 hover:bg-blue-600 text-white"  // Ajout de cette ligne
+      disabled={!newTechnician.trim() || newTechnician.trim().toLowerCase() === 'sans technicien'}
+    >
+      Ajouter Technicien
+    </Button>
+  </div>
+);
   const getDragMessage = (): React.ReactNode => {
   if (!draggedTask) return null;
 
