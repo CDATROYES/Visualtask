@@ -1345,25 +1345,25 @@ const CSVViewer: React.FC = () => {
         {renderNewOperationDialog()}
 
         {/* Onglets */}
-        <div className="flex flex-wrap gap-2">
-          {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
-            <Button
-              key={index}
-              onClick={() => setActiveTab(index)}
-              className={`
-                transition-all duration-200 flex items-center gap-2
-                ${activeTab === index 
-                  ? 'bg-blue-500 text-white shadow-md scale-105' 
-                  : 'bg-white hover:bg-gray-100'
-                }
-              `}
-            >
-              {title === 'Paramètres' && <Settings className="h-4 w-4" />}
-              {title}
-            </Button>
-          ))}
-        </div>
-      </div>
+  <div className="flex flex-wrap gap-2">
+  {['Tableau', 'Vue Véhicule', 'Vue Lieu', 'Vue Technicien', 'Paramètres'].map((title, index) => (
+    <Button
+      key={index}
+      onClick={() => setActiveTab(index)}
+      variant={activeTab === index ? "default" : "outline"} // Ajout de cette ligne
+      className={`
+        transition-all duration-200 flex items-center gap-2
+        ${activeTab === index 
+          ? 'shadow-md scale-105' 
+          : 'hover:bg-gray-100'
+        }
+      `}
+    >
+      {title === 'Paramètres' && <Settings className="h-4 w-4" />}
+      {title}
+    </Button>
+  ))}
+</div>
 
       {/* Contenu principal */}
       <Card>
