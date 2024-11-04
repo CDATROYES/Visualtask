@@ -948,6 +948,25 @@ const CSVViewer: React.FC = () => {
       </Button>
     </div>
   );
+  const getDragMessage = (): React.ReactNode => {
+  if (!draggedTask) return null;
+
+  const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
+
+  return (
+    <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+      {isUnassigned ? (
+        "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
+      ) : draggedTask.task[2] !== selectedDate ? (
+        <span className="text-red-600">
+          Impossible de déplacer une tâche en dehors de sa période ({formatDate(draggedTask.task[2])})
+        </span>
+      ) : (
+        "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
+      )}
+    </div>
+  );
+};
   const renderTopActions = (): React.ReactNode => (
     <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
       <input 
