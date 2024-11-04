@@ -742,122 +742,121 @@ const CSVViewer: React.FC = () => {
   };
 
   // Composant de dialogue pour nouvelle opération
-  const renderNewOperationDialog = (): React.ReactNode => (
-    <Dialog open={isNewOperationDialogOpen} onOpenChange={setIsNewOperationDialogOpen}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle>Créer une nouvelle opération</DialogTitle>
-          <DialogDescription>
-            Remplissez les informations pour créer une nouvelle opération de maintenance.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="vehicule" className="text-right">
-              Véhicule
-            </Label>
+const renderNewOperationDialog = (): React.ReactNode => (
+  <Dialog open={isNewOperationDialogOpen} onOpenChange={setIsNewOperationDialogOpen}>
+    <Dialog.Content className="sm:max-w-[600px]">
+      <Dialog.Header>
+        <Dialog.Title>Créer une nouvelle opération</Dialog.Title>
+        <Dialog.Description>
+          Remplissez les informations pour créer une nouvelle opération de maintenance.
+        </Dialog.Description>
+      </Dialog.Header>
+      <div className="grid gap-4 py-4">
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="vehicule" className="text-right">
+            Véhicule
+          </Label>
+          <Input
+            id="vehicule"
+            value={newOperation.vehicule}
+            onChange={(e) => handleNewOperationChange('vehicule', e.target.value)}
+            className="col-span-3"
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="description" className="text-right">
+            Description
+          </Label>
+          <Input
+            id="description"
+            value={newOperation.description}
+            onChange={(e) => handleNewOperationChange('description', e.target.value)}
+            className="col-span-3"
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="dateDebut" className="text-right">
+            Date de début
+          </Label>
+          <div className="col-span-3 grid grid-cols-2 gap-2">
             <Input
-              id="vehicule"
-              value={newOperation.vehicule}
-              onChange={(e) => handleNewOperationChange('vehicule', e.target.value)}
-              className="col-span-3"
+              id="dateDebut"
+              type="date"
+              value={newOperation.dateDebut}
+              onChange={(e) => handleNewOperationChange('dateDebut', e.target.value)}
             />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="description" className="text-right">
-              Description
-            </Label>
             <Input
-              id="description"
-              value={newOperation.description}
-              onChange={(e) => handleNewOperationChange('description', e.target.value)}
-              className="col-span-3"
+              type="time"
+              value={newOperation.heureDebut}
+              onChange={(e) => handleNewOperationChange('heureDebut', e.target.value)}
             />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="dateDebut" className="text-right">
-              Date de début
-            </Label>
-            <div className="col-span-3 grid grid-cols-2 gap-2">
-              <Input
-                id="dateDebut"
-                type="date"
-                value={newOperation.dateDebut}
-                onChange={(e) => handleNewOperationChange('dateDebut', e.target.value)}
-              />
-              <Input
-                type="time"
-                value={newOperation.heureDebut}
-                onChange={(e) => handleNewOperationChange('heureDebut', e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="dateFin" className="text-right">
-              Date de fin
-            </Label>
-            <div className="col-span-3 grid grid-cols-2 gap-2">
-              <Input
-                id="dateFin"
-                type="date"
-                value={newOperation.dateFin}
-                onChange={(e) => handleNewOperationChange('dateFin', e.target.value)}
-              />
-              <Input
-                type="time"
-                value={newOperation.heureFin}
-                onChange={(e) => handleNewOperationChange('heureFin', e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="lieu" className="text-right">
-              Lieu
-            </Label>
-            <Input
-              id="lieu"
-              value={newOperation.lieu}
-              onChange={(e) => handleNewOperationChange('lieu', e.target.value)}
-              className="col-span-3"
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="technicien" className="text-right">
-              Technicien
-            </Label>
-            <select
-              id="technicien"
-              value={newOperation.technicien}
-              onChange={(e) => handleNewOperationChange('technicien', e.target.value)}
-              className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="">Sélectionner un technicien</option>
-              {allTechnicians.map((tech) => (
-                <option key={tech} value={tech}>
-                  {tech}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
-        <div className="flex justify-end gap-4">
-          <Button
-            variant="outline"
-            onClick={() => setIsNewOperationDialogOpen(false)}
-          >
-            Annuler
-          </Button>
-          <Button
-            onClick={handleCreateOperation}
-            disabled={!validateNewOperation()}
-          >
-            Créer l'opération
-          </Button>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="dateFin" className="text-right">
+            Date de fin
+          </Label>
+          <div className="col-span-3 grid grid-cols-2 gap-2">
+            <Input
+              id="dateFin"
+              type="date"
+              value={newOperation.dateFin}
+              onChange={(e) => handleNewOperationChange('dateFin', e.target.value)}
+            />
+            <Input
+              type="time"
+              value={newOperation.heureFin}
+              onChange={(e) => handleNewOperationChange('heureFin', e.target.value)}
+            />
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="lieu" className="text-right">
+            Lieu
+          </Label>
+          <Input
+            id="lieu"
+            value={newOperation.lieu}
+            onChange={(e) => handleNewOperationChange('lieu', e.target.value)}
+            className="col-span-3"
+          />
+        </div>
+        <div className="grid grid-cols-4 items-center gap-4">
+          <Label htmlFor="technicien" className="text-right">
+            Technicien
+          </Label>
+          <select
+            id="technicien"
+            value={newOperation.technicien}
+            onChange={(e) => handleNewOperationChange('technicien', e.target.value)}
+            className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">Sélectionner un technicien</option>
+            {allTechnicians.map((tech) => (
+              <option key={tech} value={tech}>
+                {tech}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="flex justify-end gap-4">
+        <Button
+          variant="outline"
+          onClick={() => setIsNewOperationDialogOpen(false)}
+        >
+          Annuler
+        </Button>
+        <Button
+          onClick={handleCreateOperation}
+          disabled={!validateNewOperation()}
+        >
+          Créer l'opération
+        </Button>
+      </div>
+    </Dialog.Content>
+  </Dialog>
+);
   const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
     <div style={{ 
       height: `${HEADER_HEIGHT}px`, 
@@ -904,33 +903,33 @@ const CSVViewer: React.FC = () => {
     </select>
   );
 
-  const renderTopActions = (): React.ReactNode => (
-    <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
-      <input 
-        type="file" 
-        onChange={handleFileUpload} 
-        accept=".csv" 
-        className="flex-1"
-      />
-      <Button
-        onClick={() => setIsNewOperationDialogOpen(true)}
-        className="gap-2"
-      >
-        <PlusCircle className="h-4 w-4" />
-        Nouvelle opération
-      </Button>
-      <Button
-        onClick={handleExportCSV}
-        className="gap-2"
-        variant="outline"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-        Exporter CSV
-      </Button>
-    </div>
-  );
+ const renderTopActions = (): React.ReactNode => (
+  <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+    <input 
+      type="file" 
+      onChange={handleFileUpload} 
+      accept=".csv" 
+      className="flex-1"
+    />
+    <Button
+      onClick={() => setIsNewOperationDialogOpen(true)}
+      className="gap-2"
+    >
+      <PlusCircle className="h-4 w-4" />
+      Nouvelle opération
+    </Button>
+    <Button
+      onClick={handleExportCSV}
+      className="gap-2"
+      variant="outline"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+      </svg>
+      Exporter CSV
+    </Button>
+  </div>
+);
   // Rendu du Gantt Chart
   const renderGanttChart = (groupBy: string): React.ReactNode => {
     if (!selectedDate) {
