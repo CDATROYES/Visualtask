@@ -2,11 +2,14 @@
 
 import dynamic from 'next/dynamic';
 
-const CSVViewer = dynamic(() => import('@/components/client/CSVViewer'), {
-  ssr: false,
-  loading: () => <p>Chargement...</p>
+const CSVViewer = dynamic(() => import('../components/client/CSVViewer'), {
+  ssr: false
 });
 
 export default function Page() {
-  return <CSVViewer />;
+  return (
+    <div>
+      <CSVViewer />
+    </div>
+  );
 }
