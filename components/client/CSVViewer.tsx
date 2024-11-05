@@ -299,39 +299,6 @@ const generateDateRange = (start: Date, end: Date): string[] => {
     return overlaps;
   }, []);
 
-  const handleCreateOperation = (): void => {
-    const newRow = new Array(headers.length).fill('');
-    newRow[0] = newOperation.vehicule;
-    newRow[1] = newOperation.description;
-    
-    // Date de début
-    const startDate = new Date(newOperation.dateDebut);
-    startDate.setHours(12, 0, 0, 0);
-    newRow[2] = startDate.toISOString().split('T')[0];
-    newRow[3] = newOperation.heureDebut;
-    
-    // Date de fin
-    const endDate = new Date(newOperation.dateFin);
-    endDate.setHours(12, 0, 0, 0);
-    newRow[4] = endDate.toISOString().split('T')[0];
-    newRow[5] = newOperation.heureFin;
-    
-    newRow[10] = newOperation.lieu;
-    newRow[15] = newOperation.technicien || "Sans technicien";
-
-    setData(prevData => [...prevData, newRow]);
-
-    if (newOperation.dateDebut && newOperation.dateFin) {
-      const newDates = generateDateRange(startDate, endDate);
-      setUniqueDates(prevDates => {
-        const allDates = new Set([...prevDates, ...newDates]);
-        return Array.from(allDates).sort();
-      });
-    }
-
-    setNewOperation(initialNewOperation);
-    setIsNewOperationDialogOpen(false);
-};
 
   const assignDateToTask = (task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
