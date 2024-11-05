@@ -179,14 +179,12 @@ const isSameDay = (date1: string, date2: string): boolean => {
 const generateDateRange = (start: Date, end: Date): string[] => {
   const dates: string[] = [];
   const current = new Date(start);
-  // On fixe l'heure à midi pour éviter les problèmes de fuseau horaire
   current.setHours(12, 0, 0, 0);
   const endDate = new Date(end);
   endDate.setHours(12, 0, 0, 0);
   
-  // Important : on utilise <= pour inclure la date de fin
   while (current <= endDate) {
-    dates.push(new Date(current).toISOString().split('T')[0]);
+    dates.push(current.toISOString().split('T')[0]);
     current.setDate(current.getDate() + 1);
   }
   
@@ -324,7 +322,7 @@ const generateDateRange = (start: Date, end: Date): string[] => {
 
     try {
       const dateObj = new Date(dateStr);
-      dateObj.setHours(12, 0, 0, 0);
+      dateObj.setUTCHours(0, 0, 0, 0);
 
       let filteredByDate = data.filter((row: string[]) => {
         if (operationId) {
@@ -335,9 +333,9 @@ const generateDateRange = (start: Date, end: Date): string[] => {
 
         try {
           const startDate = new Date(row[2]);
-          startDate.setHours(12, 0, 0, 0);
+          startDate.setUTCHours(0, 0, 0, 0);
           const endDate = new Date(row[4]);
-          endDate.setHours(12, 0, 0, 0);
+          endDate.setUTCHours(23, 59, 59, 999);
           return startDate <= dateObj && dateObj <= endDate;
         } catch (err) {
           console.error('Erreur lors du filtrage des dates:', err);
@@ -350,7 +348,7 @@ const generateDateRange = (start: Date, end: Date): string[] => {
       console.error('Erreur lors du filtrage des données:', err);
       return [];
     }
-}, [data]);
+  }, [data]);
 
   const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
     let groupIndex: number;
@@ -427,19 +425,16 @@ const generateDateRange = (start: Date, end: Date): string[] => {
         setData(processedData);
         setHeaders(results.data[0]);
 
-        // Mise à jour des dates
+        // Mise à jour des dates et des techniciens
         const allDates = new Set<string>();
         const technicianSet = new Set<string>();
 
-        // Pour chaque ligne de données
         processedData.forEach((row: string[]) => {
           if (row[2] && row[4]) {
             const startDate = new Date(row[2]);
             startDate.setHours(12, 0, 0, 0);
             const endDate = new Date(row[4]);
             endDate.setHours(12, 0, 0, 0);
-            
-            // Générer toutes les dates entre le début et la fin
             const dates = generateDateRange(startDate, endDate);
             dates.forEach(date => allDates.add(date));
           }
@@ -448,7 +443,6 @@ const generateDateRange = (start: Date, end: Date): string[] => {
           }
         });
 
-        // Trier les dates chronologiquement
         setUniqueDates(Array.from(allDates).sort());
         
         const sortedTechnicians = Array.from(technicianSet)
