@@ -1,4 +1,3 @@
-export {};
 'use client';
 
 import * as XLSX from 'xlsx';
