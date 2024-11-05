@@ -123,7 +123,7 @@ const CSVViewer: React.FC = () => {
 
   // useEffects
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'F7') {
         setIsFiltering(prev => !prev);
       }
@@ -167,25 +167,20 @@ const CSVViewer: React.FC = () => {
   const generateDateRange = (start: Date, end: Date): string[] => {
     const dates: string[] = [];
     const current = new Date(start);
-    current.setHours(0, 0, 0, 0);
+    current.setUTCHours(0, 0, 0, 0);
     const endDate = new Date(end);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCHours(23, 59, 59, 999);
     
     while (current <= endDate) {
-      dates.push(new Date(current).toISOString().split('T')[0]);
+      dates.push(current.toISOString().split('T')[0]);
       current.setDate(current.getDate() + 1);
     }
     
     return dates;
   };
 
-    setNewOperation(initialNewOperation);
-    setIsNewOperationDialogOpen(false);
-  };
-
-	// Supprimez la définition dupliquée et gardez une seule version de handleCreateOperation
-const handleCreateOperation = () => {
-    // Créer un nouvel array avec les données de l'opération
+  // Fonction pour créer une nouvelle opération
+  const handleCreateOperation = (): void => {
     const newRow = new Array(headers.length).fill('');
     newRow[0] = newOperation.vehicule;
     newRow[1] = newOperation.description;
@@ -204,10 +199,8 @@ const handleCreateOperation = () => {
     newRow[10] = newOperation.lieu;
     newRow[15] = newOperation.technicien || "Sans technicien";
 
-    // Ajouter la nouvelle opération aux données
     setData(prevData => [...prevData, newRow]);
 
-    // Mettre à jour les dates uniques si nécessaire
     if (newOperation.dateDebut && newOperation.dateFin) {
       const newDates = generateDateRange(startDate, endDate);
       setUniqueDates(prevDates => {
@@ -216,11 +209,9 @@ const handleCreateOperation = () => {
       });
     }
 
-    // Réinitialiser le formulaire
     setNewOperation(initialNewOperation);
     setIsNewOperationDialogOpen(false);
-};
-
+  };
 
   const handleNewOperationChange = (
     field: keyof NewOperation,
@@ -232,7 +223,6 @@ const handleCreateOperation = () => {
       ...(field === 'dateDebut' && !prev.dateFin && { dateFin: value })
     }));
   };
-
   // Fonctions de gestion du temps
   const getTimePercentage = (time: string): number => {
     if (!time) return 33.33; // 8:00 par défaut
@@ -342,7 +332,8 @@ const handleCreateOperation = () => {
 
     return overlaps;
   }, []);
-  // Validation du formulaire de nouvelle opération
+
+  // Fonction de validation
   const validateNewOperation = (): boolean => {
     const {
       vehicule,
@@ -351,16 +342,13 @@ const handleCreateOperation = () => {
       heureDebut,
       dateFin,
       heureFin,
-      lieu,
-      technicien
+      lieu
     } = newOperation;
 
-    // Vérification des champs requis
     if (!vehicule || !description || !dateDebut || !dateFin || !lieu) {
       return false;
     }
 
-    // Vérification des dates et heures
     const start = new Date(`${dateDebut}T${heureDebut}`);
     const end = new Date(`${dateFin}T${heureFin}`);
 
@@ -371,35 +359,30 @@ const handleCreateOperation = () => {
     return true;
   };
 
-  // Fonction d'assignation de date à une tâche
   const assignDateToTask = (task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
-    updatedTask[2] = targetDate;    // Date de début
+    updatedTask[2] = targetDate;
     
-    // Vérifier si la tâche a déjà des heures définies
     const hasTime = Boolean(task[3] && task[5]);
     if (hasTime) {
-      // Conserver les heures existantes
-      updatedTask[3] = task[3];    // Garder l'heure de début existante
-      updatedTask[4] = targetDate;  // Nouvelle date de fin
-      updatedTask[5] = task[5];    // Garder l'heure de fin existante
+      updatedTask[3] = task[3];
+      updatedTask[4] = targetDate;
+      updatedTask[5] = task[5];
     } else {
-      // Utiliser les heures par défaut uniquement si aucune heure n'est définie
-      updatedTask[3] = '08:00';    // Heure de début par défaut
-      updatedTask[4] = targetDate;  // Date de fin
-      updatedTask[5] = '09:00';    // Heure de fin par défaut
+      updatedTask[3] = '08:00';
+      updatedTask[4] = targetDate;
+      updatedTask[5] = '09:00';
     }
     
     return updatedTask;
   };
-
   // Fonctions de gestion des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
     try {
       const dateObj = new Date(dateStr);
-      dateObj.setHours(0, 0, 0, 0);
+      dateObj.setUTCHours(0, 0, 0, 0);
 
       let filteredByDate = data.filter((row: string[]) => {
         if (operationId) {
@@ -410,9 +393,9 @@ const handleCreateOperation = () => {
 
         try {
           const startDate = new Date(row[2]);
-          startDate.setHours(0, 0, 0, 0);
+          startDate.setUTCHours(0, 0, 0, 0);
           const endDate = new Date(row[4]);
-          endDate.setHours(23, 59, 59, 999);
+          endDate.setUTCHours(23, 59, 59, 999);
           return startDate <= dateObj && dateObj <= endDate;
         } catch (err) {
           console.error('Erreur lors du filtrage des dates:', err);
@@ -471,6 +454,7 @@ const handleCreateOperation = () => {
 
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
+
   // Fonctions d'édition
   const handleInputChange = (header: string, value: string): void => {
     setEditedData(prev => ({
@@ -505,7 +489,7 @@ const handleCreateOperation = () => {
     setEditedData({});
   };
 
-  // Fonctions de gestion des colonnes et filtres
+  // Fonctions de gestion des colonnes
   const handleFilterChange = (header: string, value: string): void => {
     setFilters(prev => ({
       ...prev,
@@ -537,74 +521,6 @@ const handleCreateOperation = () => {
       }))
     );
   };
-
-  // Gestion des fichiers
-// Gestion du fichier CSV
-const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    parse(file, {
-      complete: (results: CSVResult) => {
-        const processedData = results.data.slice(1)
-          .filter((row: string[]) => row.some(cell => cell))
-          .map((row: string[]) => {
-            const updatedRow = [...row];
-            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
-
-            // Correction des dates pour éviter le décalage
-            if (updatedRow[2] && updatedRow[4]) {
-              // Pour la date de début
-              const startDate = new Date(updatedRow[2]);
-              startDate.setUTCHours(12, 0, 0, 0);  // Définir à midi UTC
-              updatedRow[2] = startDate.toISOString().split('T')[0];
-
-              // Pour la date de fin
-              const endDate = new Date(updatedRow[4]);
-              endDate.setUTCHours(12, 0, 0, 0);  // Définir à midi UTC
-              updatedRow[4] = endDate.toISOString().split('T')[0];
-            }
-            return updatedRow;
-          });
-
-        setData(processedData);
-        setHeaders(results.data[0]);
-
-        // Mise à jour des dates et des techniciens
-        const allDates = new Set<string>();
-        const technicianSet = new Set<string>();
-
-        processedData.forEach((row: string[]) => {
-          if (row[2] && row[4]) {
-            const startDate = new Date(row[2]);
-            const endDate = new Date(row[4]);
-            const dates = generateDateRange(startDate, endDate);
-            dates.forEach(date => allDates.add(date));
-          }
-          if (row[15]) {
-            technicianSet.add(row[15].trim());
-          }
-        });
-
-        setUniqueDates(Array.from(allDates).sort());
-        
-        const sortedTechnicians = Array.from(technicianSet)
-          .filter(tech => tech && tech !== "Sans technicien")
-          .sort((a, b) => a.localeCompare(b));
-
-        if (technicianSet.has("Sans technicien")) {
-          sortedTechnicians.push("Sans technicien");
-        }
-
-        setAllTechnicians(sortedTechnicians);
-      },
-      error: (error: Error) => {
-        console.error('Erreur lors de la lecture du fichier:', error);
-      }
-    });
-};
-
-
 
   // Filtrage des données
   const filteredData = data.filter(row => {
@@ -744,8 +660,69 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
   const handleTaskClick = (operationId: string): void => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
+  // Gestion des fichiers
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  // Export function
+    parse(file, {
+      complete: (results: CSVResult) => {
+        const processedData = results.data.slice(1)
+          .filter((row: string[]) => row.some(cell => cell))
+          .map((row: string[]) => {
+            const updatedRow = [...row];
+            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
+
+            // Correction des dates pour éviter le décalage
+            if (updatedRow[2] && updatedRow[4]) {
+              const startDate = new Date(updatedRow[2]);
+              startDate.setUTCHours(12, 0, 0, 0);
+              updatedRow[2] = startDate.toISOString().split('T')[0];
+
+              const endDate = new Date(updatedRow[4]);
+              endDate.setUTCHours(12, 0, 0, 0);
+              updatedRow[4] = endDate.toISOString().split('T')[0];
+            }
+            return updatedRow;
+          });
+
+        setData(processedData);
+        setHeaders(results.data[0]);
+
+        // Mise à jour des dates et des techniciens
+        const allDates = new Set<string>();
+        const technicianSet = new Set<string>();
+
+        processedData.forEach((row: string[]) => {
+          if (row[2] && row[4]) {
+            const startDate = new Date(row[2]);
+            const endDate = new Date(row[4]);
+            const dates = generateDateRange(startDate, endDate);
+            dates.forEach(date => allDates.add(date));
+          }
+          if (row[15]) {
+            technicianSet.add(row[15].trim());
+          }
+        });
+
+        setUniqueDates(Array.from(allDates).sort());
+        
+        const sortedTechnicians = Array.from(technicianSet)
+          .filter(tech => tech && tech !== "Sans technicien")
+          .sort((a, b) => a.localeCompare(b));
+
+        if (technicianSet.has("Sans technicien")) {
+          sortedTechnicians.push("Sans technicien");
+        }
+
+        setAllTechnicians(sortedTechnicians);
+      },
+      error: (error: Error) => {
+        console.error('Erreur lors de la lecture du fichier:', error);
+      }
+    });
+  };
+
   const handleExportExcel = (): void => {
     const dataToExport = (isFiltering ? filteredData : data).map(row => {
       const formattedRow = [...row];
@@ -786,14 +763,15 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
   };
-  // Composants de rendu de base
+
+  // Fonctions de rendu auxiliaires
   const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
     const isEditing = editingRow === operationId;
@@ -820,202 +798,174 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     }
     return cell || '';
   };
-
-  // Composant de dialogue pour nouvelle opération
-  const renderNewOperationDialog = (): React.ReactNode => (
-    <Dialog open={isNewOperationDialogOpen} onOpenChange={setIsNewOperationDialogOpen}>
-      <Dialog.Content className="sm:max-w-[600px]">
-        <Dialog.Header>
-          <Dialog.Title>Créer une nouvelle opération</Dialog.Title>
-          <Dialog.Description>
-            Remplissez les informations pour créer une nouvelle opération de maintenance.
-          </Dialog.Description>
-        </Dialog.Header>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="vehicule" className="text-right">
-              Véhicule
-            </Label>
-            <Input
-              id="vehicule"
-              value={newOperation.vehicule}
-              onChange={(e) => handleNewOperationChange('vehicule', e.target.value)}
-              className="col-span-3"
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="description" className="text-right">
-              Description
-            </Label>
-            <Input
-              id="description"
-              value={newOperation.description}
-              onChange={(e) => handleNewOperationChange('description', e.target.value)}
-              className="col-span-3"
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="dateDebut" className="text-right">
-              Date de début
-            </Label>
-            <div className="col-span-3 grid grid-cols-2 gap-2">
+  // Composants de rendu
+  const renderNewOperationDialog = (): React.ReactNode => {
+    return (
+      <Dialog open={isNewOperationDialogOpen} onOpenChange={setIsNewOperationDialogOpen}>
+        <Dialog.Content className="sm:max-w-[600px]">
+          <Dialog.Header>
+            <Dialog.Title>Créer une nouvelle opération</Dialog.Title>
+            <Dialog.Description>
+              Remplissez les informations pour créer une nouvelle opération de maintenance.
+            </Dialog.Description>
+          </Dialog.Header>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="vehicule" className="text-right">
+                Véhicule
+              </Label>
               <Input
-                id="dateDebut"
-                type="date"
-                value={newOperation.dateDebut}
-                onChange={(e) => handleNewOperationChange('dateDebut', e.target.value)}
-              />
-              <Input
-                type="time"
-                value={newOperation.heureDebut}
-                onChange={(e) => handleNewOperationChange('heureDebut', e.target.value)}
+                id="vehicule"
+                value={newOperation.vehicule}
+                onChange={(e) => handleNewOperationChange('vehicule', e.target.value)}
+                className="col-span-3"
               />
             </div>
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="dateFin" className="text-right">
-              Date de fin
-            </Label>
-            <div className="col-span-3 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="description" className="text-right">
+                Description
+              </Label>
               <Input
-                id="dateFin"
-                type="date"
-                value={newOperation.dateFin}
-                onChange={(e) => handleNewOperationChange('dateFin', e.target.value)}
-              />
-              <Input
-                type="time"
-                value={newOperation.heureFin}
-                onChange={(e) => handleNewOperationChange('heureFin', e.target.value)}
+                id="description"
+                value={newOperation.description}
+                onChange={(e) => handleNewOperationChange('description', e.target.value)}
+                className="col-span-3"
               />
             </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="dateDebut" className="text-right">
+                Date de début
+              </Label>
+              <div className="col-span-3 grid grid-cols-2 gap-2">
+                <Input
+                  id="dateDebut"
+                  type="date"
+                  value={newOperation.dateDebut}
+                  onChange={(e) => handleNewOperationChange('dateDebut', e.target.value)}
+                />
+                <Input
+                  type="time"
+                  value={newOperation.heureDebut}
+                  onChange={(e) => handleNewOperationChange('heureDebut', e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="dateFin" className="text-right">
+                Date de fin
+              </Label>
+              <div className="col-span-3 grid grid-cols-2 gap-2">
+                <Input
+                  id="dateFin"
+                  type="date"
+                  value={newOperation.dateFin}
+                  onChange={(e) => handleNewOperationChange('dateFin', e.target.value)}
+                />
+                <Input
+                  type="time"
+                  value={newOperation.heureFin}
+                  onChange={(e) => handleNewOperationChange('heureFin', e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="lieu" className="text-right">
+                Lieu
+              </Label>
+              <Input
+                id="lieu"
+                value={newOperation.lieu}
+                onChange={(e) => handleNewOperationChange('lieu', e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="technicien" className="text-right">
+                Technicien
+              </Label>
+              <select
+                id="technicien"
+                value={newOperation.technicien}
+                onChange={(e) => handleNewOperationChange('technicien', e.target.value)}
+                className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Sélectionner un technicien</option>
+                {allTechnicians.map((tech) => (
+                  <option key={tech} value={tech}>
+                    {tech}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="lieu" className="text-right">
-              Lieu
-            </Label>
-            <Input
-              id="lieu"
-              value={newOperation.lieu}
-              onChange={(e) => handleNewOperationChange('lieu', e.target.value)}
-              className="col-span-3"
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="technicien" className="text-right">
-              Technicien
-            </Label>
-            <select
-              id="technicien"
-              value={newOperation.technicien}
-              onChange={(e) => handleNewOperationChange('technicien', e.target.value)}
-              className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          <div className="flex justify-end gap-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsNewOperationDialogOpen(false)}
             >
-              <option value="">Sélectionner un technicien</option>
-              {allTechnicians.map((tech) => (
-                <option key={tech} value={tech}>
-                  {tech}
-                </option>
-              ))}
-            </select>
+              Annuler
+            </Button>
+            <Button
+              onClick={handleCreateOperation}
+              disabled={!validateNewOperation()}
+            >
+              Créer l'opération
+            </Button>
           </div>
-        </div>
-        <div className="flex justify-end gap-4">
-          <Button
-            variant="outline"
-            onClick={() => setIsNewOperationDialogOpen(false)}
-          >
-            Annuler
-          </Button>
-          <Button
-            onClick={handleCreateOperation}
-            disabled={!validateNewOperation()}
-          >
-            Créer l'opération
-          </Button>
-        </div>
-      </Dialog.Content>
-    </Dialog>
-  );
+        </Dialog.Content>
+      </Dialog>
+    );
+  };
 
-  // Composants de rendu du header et des contrôles
-  const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => (
-    <div style={{ 
-      height: `${HEADER_HEIGHT}px`, 
-      borderBottom: '2px solid #333', 
-      backgroundColor: '#f0f0f0', 
-      position: 'relative'
-    }}>
-      {Array.from({ length: 24 }).map((_, index) => (
-        <div key={index} style={{ 
-          position: 'absolute', 
-          left: `${index * (100 / 24)}%`, 
-          height: '100%', 
-          borderLeft: '1px solid #ccc',
-          width: '1px'
-        }}>
-          <span style={{ 
+  const renderTimeHeader = ({ HEADER_HEIGHT }: Pick<RenderProps, 'HEADER_HEIGHT'>): React.ReactNode => {
+    return (
+      <div style={{ 
+        height: `${HEADER_HEIGHT}px`, 
+        borderBottom: '2px solid #333', 
+        backgroundColor: '#f0f0f0', 
+        position: 'relative'
+      }}>
+        {Array.from({ length: 24 }).map((_, index) => (
+          <div key={index} style={{ 
             position: 'absolute', 
-            bottom: '5px', 
-            left: '-15px', 
-            fontSize: '12px',
-            width: '30px',
-            textAlign: 'center'
+            left: `${index * (100 / 24)}%`, 
+            height: '100%', 
+            borderLeft: '1px solid #ccc',
+            width: '1px'
           }}>
-            {`${index.toString().padStart(2, '0')}:00`}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+            <span style={{ 
+              position: 'absolute', 
+              bottom: '5px', 
+              left: '-15px', 
+              fontSize: '12px',
+              width: '30px',
+              textAlign: 'center'
+            }}>
+              {`${index.toString().padStart(2, '0')}:00`}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
-  const renderDateSelector = (): React.ReactNode => (
-    <select 
-      value={selectedDate} 
-      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
-      className="w-full md:w-auto p-2 border rounded"
-    >
-      <option value="">Sélectionnez une date</option>
-      {uniqueDates.map(date => (
-        <option key={date} value={date}>
-          {formatDate(date)}
-        </option>
-      ))}
-    </select>
-  );
-
-  const renderTechnicianInput = (): React.ReactNode => (
-    <div className="flex gap-2 w-full items-center">
-      <Input
-        type="text"
-        value={newTechnician}
-        onChange={(e) => setNewTechnician(e.target.value)}
-        placeholder="Nouveau technicien"
-        className="flex-1"
-      />
-      <Button
-        onClick={() => {
-          if (newTechnician.trim() && newTechnician.trim().toLowerCase() !== 'sans technicien') {
-            const updatedTechnicians = [...allTechnicians];
-            const hasSansTechnicien = updatedTechnicians.includes("Sans technicien");
-            const filteredTechnicians = updatedTechnicians.filter(tech => tech !== "Sans technicien");
-            if (!filteredTechnicians.includes(newTechnician.trim())) {
-              filteredTechnicians.push(newTechnician.trim());
-              filteredTechnicians.sort((a, b) => a.localeCompare(b));
-              if (hasSansTechnicien) {
-                filteredTechnicians.push("Sans technicien");
-              }
-              setAllTechnicians(filteredTechnicians);
-              setNewTechnician('');
-            }
-          }
-        }}
-        disabled={!newTechnician.trim() || newTechnician.trim().toLowerCase() === 'sans technicien'}
+  const renderDateSelector = (): React.ReactNode => {
+    return (
+      <select 
+        value={selectedDate} 
+        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDate(e.target.value)}
+        className="w-full md:w-auto p-2 border rounded"
       >
-        Ajouter Technicien
-      </Button>
-    </div>
-  );
+        <option value="">Sélectionnez une date</option>
+        {uniqueDates.map(date => (
+          <option key={date} value={date}>
+            {formatDate(date)}
+          </option>
+        ))}
+      </select>
+    );
+  };
+
   const getDragMessage = (): React.ReactNode => {
     if (!draggedTask) return null;
 
@@ -1035,36 +985,89 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
       </div>
     );
   };
+  const renderTechnicianInput = (): React.ReactNode => {
+    return (
+      <div className="flex gap-2 w-full items-center">
+        <Input
+          type="text"
+          value={newTechnician}
+          onChange={(e) => setNewTechnician(e.target.value)}
+          placeholder="Nouveau technicien"
+          className="flex-1"
+        />
+        <Button
+          onClick={() => {
+            if (newTechnician.trim() && newTechnician.trim().toLowerCase() !== 'sans technicien') {
+              const updatedTechnicians = [...allTechnicians];
+              const hasSansTechnicien = updatedTechnicians.includes("Sans technicien");
+              const filteredTechnicians = updatedTechnicians.filter(tech => tech !== "Sans technicien");
+              if (!filteredTechnicians.includes(newTechnician.trim())) {
+                filteredTechnicians.push(newTechnician.trim());
+                filteredTechnicians.sort((a, b) => a.localeCompare(b));
+                if (hasSansTechnicien) {
+                  filteredTechnicians.push("Sans technicien");
+                }
+                setAllTechnicians(filteredTechnicians);
+                setNewTechnician('');
+              }
+            }
+          }}
+          disabled={!newTechnician.trim() || newTechnician.trim().toLowerCase() === 'sans technicien'}
+        >
+          Ajouter Technicien
+        </Button>
+      </div>
+    );
+  };
 
-  const renderTopActions = (): React.ReactNode => (
-    <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
-      <input 
-        type="file" 
-        onChange={handleFileUpload} 
-        accept=".csv" 
-        className="flex-1"
-      />
-      <Button
-        onClick={() => setIsNewOperationDialogOpen(true)}
-        className="gap-2"
-      >
-        <PlusCircle className="h-4 w-4" />
-        Nouvelle opération
-      </Button>
-      <Button
-        onClick={handleExportExcel}
-        className="gap-2"
-        variant="outline"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-        Exporter Excel
-      </Button>
-    </div>
-  );
-// Fonction de rendu du tableau
-const renderTable = (dataToRender: string[][]): React.ReactNode => {
+  const renderTopActions = (): React.ReactNode => {
+    return (
+      <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+        <input 
+          type="file" 
+          onChange={handleFileUpload} 
+          accept=".csv" 
+          className="flex-1"
+        />
+        <Button
+          onClick={() => setIsNewOperationDialogOpen(true)}
+          className="gap-2"
+        >
+          <PlusCircle className="h-4 w-4" />
+          Nouvelle opération
+        </Button>
+        <Button
+          onClick={handleExportExcel}
+          className="gap-2"
+          variant="outline"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Exporter Excel
+        </Button>
+      </div>
+    );
+  };
+
+  const renderFilterReset = (): React.ReactNode => {
+    if (!selectedTask) return null;
+
+    return (
+      <div className="flex items-center justify-end mb-4">
+        <Button
+          onClick={() => setSelectedTask(null)}
+          variant="destructive"
+          className="flex items-center gap-2"
+        >
+          <X className="h-4 w-4" />
+          Réinitialiser le filtre
+        </Button>
+      </div>
+    );
+  };
+
+  const renderTable = (dataToRender: string[][]): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
     return (
@@ -1169,213 +1172,6 @@ const renderTable = (dataToRender: string[][]): React.ReactNode => {
         </div>
       </div>
     );
-};
-  // Rendu du Gantt Chart
-  const renderGanttChart = (groupBy: string): React.ReactNode => {
-    if (!selectedDate) {
-      return <p>Veuillez sélectionner une date</p>;
-    }
-
-    const BASE_ROW_HEIGHT = 60;
-    const HEADER_HEIGHT = 40;
-    const TASK_HEIGHT = 20;
-    const TASK_MARGIN = 4;
-    const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
-
-    const filteredDataForDate = filterDataForDate(selectedDate);
-    const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = 
-      groupDataByType(groupBy, filteredDataForDate) || {};
-
-    if (!groups.length && !unassignedTasks.length && groupBy !== 'Technicien') {
-      return <p>Aucune donnée à afficher pour cette date</p>;
-    }
-
-    const groupedData: GanttChartData[] = groups.map(group => {
-      let tasks: TaskData[];
-      
-      if (group === "Non affectées") {
-        tasks = unassignedTasks.map(task => ({
-          task,
-          startPercentage: task[3] && task[5] ? getTimePercentage(task[3]) : 33.33,
-          duration: task[3] && task[5] ? calculateDuration(task[3], task[5]) : 4.17,
-          operationId: getOperationId(task),
-          isMultiDay: false,
-          isStart: true,
-          isEnd: true,
-          isUnassigned: true,
-          dayStartPercentage: task[3] && task[5] ? getTimePercentage(task[3]) : 33.33,
-          dayEndPercentage: task[3] && task[5] ? getTimePercentage(task[5]) : 37.50
-        }));
-      } else {
-        tasks = filteredDataForDate
-          .filter(row => row && row[groupIndex] === group)
-          .map(task => {
-            const hasStartAndEnd = Boolean(task[2] && task[4]);
-            const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
-            const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
-            const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
-
-            const { dayStartPercentage, dayEndPercentage } = calculateDayPercentages(task, selectedDate);
-
-            return {
-              task,
-              startPercentage: getTimePercentage(task[3]),
-              duration: calculateDuration(task[3], task[5]),
-              operationId: getOperationId(task),
-              isMultiDay,
-              isStart,
-              isEnd,
-              isUnassigned: false,
-              dayStartPercentage,
-              dayEndPercentage
-            };
-          });
-      }
-
-      const overlaps = detectOverlaps(tasks);
-      const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
-      const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
-
-      return {
-        group,
-        tasks,
-        overlaps,
-        rowHeight,
-        isUnassignedGroup: group === "Non affectées"
-      };
-    });
-
-    return (
-      <div style={{ overflowX: 'auto', width: '100%' }}>
-        <div style={{ display: 'flex', minWidth: '1000px' }}>
-          {/* Colonne des groupes */}
-          <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
-            <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
-                 className="flex items-center font-bold">
-              {groupBy}
-            </div>
-            {groupedData.map(({ group, rowHeight, isUnassignedGroup }, index) => (
-              <div 
-                key={group} 
-                style={{ height: `${rowHeight}px` }}
-                className={`
-                  flex items-center px-2.5 border-b border-gray-200
-                  ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                  ${group === 'Sans technicien' ? 'text-red-500' : ''}
-                `}
-              >
-                {group || 'N/A'}
-              </div>
-            ))}
-          </div>
-
-          {/* Zone de contenu */}
-          <div style={{ flex: 1, position: 'relative' }}>
-            {renderTimeHeader({ HEADER_HEIGHT })}
-            {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
-              <div 
-                key={group}
-                style={{ height: `${rowHeight}px` }}
-                className={`
-                  relative border-b border-gray-200
-                  ${dropZoneActive === group ? 'bg-blue-50' : 
-                    isUnassignedGroup ? 'bg-yellow-50' : 
-                    index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
-                `}
-                onDragOver={handleDragOver}
-                onDragEnter={(e) => handleDragEnter(e, group)}
-                onDragLeave={(e) => handleDragLeave(e, group)}
-                onDrop={(e) => handleDrop(group, e)}
-              >
-                {tasks.map((taskData) => (
-                  <div
-                    key={`${taskData.operationId}_${selectedDate}`}
-                    draggable={true}
-                    onDragStart={(e) => handleDragStart(e, taskData)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => handleTaskClick(taskData.operationId)}
-                    style={{
-                      position: 'absolute',
-                      left: `${taskData.dayStartPercentage ?? taskData.startPercentage}%`,
-                      width: `${(taskData.dayEndPercentage ?? (taskData.startPercentage + taskData.duration)) - 
-                              (taskData.dayStartPercentage ?? taskData.startPercentage)}%`,
-                      height: `${TASK_HEIGHT}px`,
-                      top: TASK_MARGIN + ((overlaps.get(taskData.operationId) || 0) * (TASK_HEIGHT + TASK_MARGIN)),
-                      backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
-                      cursor: 'pointer',
-                      outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
-                      boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
-                    }}
-                    className={`
-                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
-                      hover:brightness-90 transition-all duration-200
-                      ${taskData.isUnassigned ? 'text-black' : ''}
-                      ${taskData.isMultiDay ? 'border-2 border-blue-300' : ''}
-                    `}
-                  >
-                    {`${taskData.task[0] || 'N/A'} - ${taskData.task[1] || 'N/A'}`}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) => (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        {renderDateSelector()}
-        {showTechnicianInput && renderTechnicianInput()}
-      </div>
-
-      <div className="space-y-6">
-        <div className="relative bg-white rounded-lg shadow-sm">
-          {renderGanttChart(groupBy)}
-        </div>
-        
-        {draggedTask && getDragMessage()}
-        
-        <div className="text-sm text-gray-500 italic space-y-1">
-          {showTechnicianInput && (
-            <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
-          )}
-          <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
-          <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
-        </div>
-
-        {selectedDate && (
-          <div className="mt-8 border-t-2 border-gray-200 pt-8">
-            {renderFilterReset()}
-            <h3 className="text-lg font-semibold mb-4">
-              {selectedTask 
-                ? "Détails de l'opération sélectionnée"
-                : `Détails des opérations pour le ${formatDate(selectedDate)}`}
-            </h3>
-            {renderTable(filterDataForDate(selectedDate, selectedTask))}
-          </div>
-        )}
-      </div>
-    </div>
-);
-
-  const renderFilterReset = (): React.ReactNode => {
-    if (!selectedTask) return null;
-
-    return (
-      <div className="flex items-center justify-end mb-4">
-        <Button
-          onClick={() => setSelectedTask(null)}
-          variant="destructive"
-          className="flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Réinitialiser le filtre
-        </Button>
-      </div>
-    );
   };
 
   // Rendu final du composant
@@ -1431,10 +1227,7 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false) 
                   </div>
                 ))}
               </div>
-              <Button
-                onClick={resetColumnVisibility}
-                className="mt-4"
-              >
+              <Button onClick={resetColumnVisibility} className="mt-4">
                 Réinitialiser
               </Button>
             </div>
