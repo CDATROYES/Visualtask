@@ -1,4 +1,5 @@
 'use client';
+export {};
 
 import * as XLSX from 'xlsx';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -9,6 +10,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
 // Interfaces principales
 interface ColumnVisibility {
   index: number;
@@ -91,22 +93,12 @@ const initialNewOperation: NewOperation = {
   technicien: ''
 };
 
-// Fonction de formatage des dates
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-                'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  
-  return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
-};
-
-// Fonction utilitaire pour corriger les dates (à ajouter)
+// Fonction utilitaire pour corriger les dates
 const correctDate = (date: Date): Date => {
   return new Date(date.getTime() + date.getTimezoneOffset() * 60000);
 };
 
-// Fonction de formatage des dates (à remplacer)
+// Fonction de formatage des dates
 const formatDate = (dateStr: string): string => {
   const date = correctDate(new Date(dateStr));
   const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -115,8 +107,6 @@ const formatDate = (dateStr: string): string => {
   
   return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
 };
-
-
 // Début du composant principal
 const CSVViewer: React.FC = () => {
   // États du composant
@@ -140,7 +130,7 @@ const CSVViewer: React.FC = () => {
 
   // useEffects
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent): void => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F7') {
         setIsFiltering(prev => !prev);
       }
@@ -161,9 +151,6 @@ const CSVViewer: React.FC = () => {
     }
   }, [headers]);
 
-const CSVViewer: React.FC = () => {
-  // ... états et useEffects ...
-
   // Fonctions utilitaires de base
   const isSameDay = (date1: string, date2: string): boolean => {
     if (!date1 || !date2) return false;
@@ -176,12 +163,21 @@ const CSVViewer: React.FC = () => {
            correctedD1.getDate() === correctedD2.getDate();
   };
 
+  const getOperationId = (task: string[]): string => {
+    return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
+  };
+
+  const getUniqueColor = (index: number): string => {
+    const hue = (index * 137.508) % 360;
+    return `hsl(${hue}, 70%, 50%)`;
+  };
+
   const generateDateRange = (start: Date, end: Date): string[] => {
     const dates: string[] = [];
     const current = new Date(start);
-    current.setHours(0, 0, 0, 0);
+    current.setUTCHours(0, 0, 0, 0);
     const endDate = new Date(end);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCHours(23, 59, 59, 999);
     
     while (current <= endDate) {
       const correctedDate = correctDate(current);
@@ -192,87 +188,6 @@ const CSVViewer: React.FC = () => {
     return dates;
   };
 
-
-  // Fonctions utilitaires de base
-  const isSameDay = (date1: string, date2: string): boolean => {
-    if (!date1 || !date2) return false;
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    return d1.getFullYear() === d2.getFullYear() &&
-           d1.getMonth() === d2.getMonth() &&
-           d1.getDate() === d2.getDate();
-  };
-
-  const getOperationId = (task: string[]): string => {
-    return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
-  };
-
-  const getUniqueColor = (index: number): string => {
-    const hue = (index * 137.508) % 360;
-    return `hsl(${hue}, 70%, 50%)`;
-  };
-
-  // Fonction pour générer la plage de dates
-  const generateDateRange = (start: Date, end: Date): string[] => {
-    const dates: string[] = [];
-    const current = new Date(start);
-    current.setUTCHours(0, 0, 0, 0);
-    const endDate = new Date(end);
-    endDate.setUTCHours(23, 59, 59, 999);
-    
-    while (current <= endDate) {
-      dates.push(current.toISOString().split('T')[0]);
-      current.setDate(current.getDate() + 1);
-    }
-    
-    return dates;
-  };
-
-  // Fonction pour créer une nouvelle opération
-  const handleCreateOperation = (): void => {
-    const newRow = new Array(headers.length).fill('');
-    newRow[0] = newOperation.vehicule;
-    newRow[1] = newOperation.description;
-    
-    // Correction des dates pour la nouvelle opération
-    let startDate = new Date(newOperation.dateDebut);
-    startDate = correctDate(startDate);
-    newRow[2] = startDate.toISOString().split('T')[0];
-    newRow[3] = newOperation.heureDebut;
-    
-    let endDate = new Date(newOperation.dateFin);
-    endDate = correctDate(endDate);
-    newRow[4] = endDate.toISOString().split('T')[0];
-    newRow[5] = newOperation.heureFin;
-    
-    newRow[10] = newOperation.lieu;
-    newRow[15] = newOperation.technicien || "Sans technicien";
-
-    setData(prevData => [...prevData, newRow]);
-
-    if (newOperation.dateDebut && newOperation.dateFin) {
-      const newDates = generateDateRange(startDate, endDate);
-      setUniqueDates(prevDates => {
-        const allDates = new Set([...prevDates, ...newDates]);
-        return Array.from(allDates).sort();
-      });
-    }
-
-    setNewOperation(initialNewOperation);
-    setIsNewOperationDialogOpen(false);
-  };
-
-  const handleNewOperationChange = (
-    field: keyof NewOperation,
-    value: string
-  ): void => {
-    setNewOperation(prev => ({
-      ...prev,
-      [field]: value,
-      ...(field === 'dateDebut' && !prev.dateFin && { dateFin: value })
-    }));
-  };
-  // Fonctions de gestion du temps
   const getTimePercentage = (time: string): number => {
     if (!time) return 33.33; // 8:00 par défaut
     try {
@@ -298,7 +213,6 @@ const CSVViewer: React.FC = () => {
       return 4.17;
     }
   };
-
   const calculateDayPercentages = useCallback((
     task: string[], 
     selectedDate: string
@@ -382,7 +296,39 @@ const CSVViewer: React.FC = () => {
     return overlaps;
   }, []);
 
-  // Fonction de validation
+  const handleCreateOperation = (): void => {
+    const newRow = new Array(headers.length).fill('');
+    newRow[0] = newOperation.vehicule;
+    newRow[1] = newOperation.description;
+    
+    // Correction des dates pour la nouvelle opération
+    let startDate = new Date(newOperation.dateDebut);
+    startDate = correctDate(startDate);
+    newRow[2] = startDate.toISOString().split('T')[0];
+    newRow[3] = newOperation.heureDebut;
+    
+    let endDate = new Date(newOperation.dateFin);
+    endDate = correctDate(endDate);
+    newRow[4] = endDate.toISOString().split('T')[0];
+    newRow[5] = newOperation.heureFin;
+    
+    newRow[10] = newOperation.lieu;
+    newRow[15] = newOperation.technicien || "Sans technicien";
+
+    setData(prevData => [...prevData, newRow]);
+
+    if (newOperation.dateDebut && newOperation.dateFin) {
+      const newDates = generateDateRange(startDate, endDate);
+      setUniqueDates(prevDates => {
+        const allDates = new Set([...prevDates, ...newDates]);
+        return Array.from(allDates).sort();
+      });
+    }
+
+    setNewOperation(initialNewOperation);
+    setIsNewOperationDialogOpen(false);
+  };
+
   const validateNewOperation = (): boolean => {
     const {
       vehicule,
@@ -408,6 +354,17 @@ const CSVViewer: React.FC = () => {
     return true;
   };
 
+  const handleNewOperationChange = (
+    field: keyof NewOperation,
+    value: string
+  ): void => {
+    setNewOperation(prev => ({
+      ...prev,
+      [field]: value,
+      ...(field === 'dateDebut' && !prev.dateFin && { dateFin: value })
+    }));
+  };
+
   const assignDateToTask = (task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
     updatedTask[2] = targetDate;
@@ -425,7 +382,6 @@ const CSVViewer: React.FC = () => {
     
     return updatedTask;
   };
-  // Fonctions de gestion des données
   const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
     if (!dateStr || !data.length) return [];
 
@@ -504,71 +460,102 @@ const CSVViewer: React.FC = () => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
 
-  // Fonctions d'édition
-  const handleInputChange = (header: string, value: string): void => {
-    setEditedData(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-  const handleEditClick = (row: string[]): void => {
-    const operationId = getOperationId(row);
-    setEditingRow(operationId);
-    const rowData: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      rowData[header] = row[index] || '';
+    parse(file, {
+      complete: (results: CSVResult) => {
+        const processedData = results.data.slice(1)
+          .filter((row: string[]) => row.some(cell => cell))
+          .map((row: string[]) => {
+            const updatedRow = [...row];
+            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
+
+            // Correction des dates
+            if (updatedRow[2] && updatedRow[4]) {
+              let startDate = new Date(updatedRow[2]);
+              startDate = correctDate(startDate);
+              updatedRow[2] = startDate.toISOString().split('T')[0];
+
+              let endDate = new Date(updatedRow[4]);
+              endDate = correctDate(endDate);
+              updatedRow[4] = endDate.toISOString().split('T')[0];
+            }
+            return updatedRow;
+          });
+
+        setData(processedData);
+        setHeaders(results.data[0]);
+
+        // Mise à jour des dates et des techniciens
+        const allDates = new Set<string>();
+        const technicianSet = new Set<string>();
+
+        processedData.forEach((row: string[]) => {
+          if (row[2] && row[4]) {
+            const startDate = correctDate(new Date(row[2]));
+            const endDate = correctDate(new Date(row[4]));
+            const dates = generateDateRange(startDate, endDate);
+            dates.forEach(date => allDates.add(date));
+          }
+          if (row[15]) {
+            technicianSet.add(row[15].trim());
+          }
+        });
+
+        setUniqueDates(Array.from(allDates).sort());
+        
+        const sortedTechnicians = Array.from(technicianSet)
+          .filter(tech => tech && tech !== "Sans technicien")
+          .sort((a, b) => a.localeCompare(b));
+
+        if (technicianSet.has("Sans technicien")) {
+          sortedTechnicians.push("Sans technicien");
+        }
+
+        setAllTechnicians(sortedTechnicians);
+      },
+      error: (error: Error) => {
+        console.error('Erreur lors de la lecture du fichier:', error);
+      }
     });
-    setEditedData(rowData);
   };
 
-  const handleCancelEdit = (): void => {
-    setEditingRow(null);
-    setEditedData({});
-  };
+  const handleExportExcel = (): void => {
+    const dataToExport = (isFiltering ? filteredData : data).map(row => {
+      const formattedRow = [...row];
+      
+      if (row[2]) {
+        const date = new Date(row[2]);
+        formattedRow[2] = date.toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      }
+      if (row[4]) {
+        const date = new Date(row[4]);
+        formattedRow[4] = date.toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+      }
+      
+      return formattedRow;
+    });
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataToExport]);
+    
+    ws['!cols'] = headers.map((_, index) => {
+      return index === 2 || index === 4 ? { wch: 12 } : { wch: 15 };
+    });
 
-  const handleSaveEdit = (operationId: string): void => {
-    setData(prevData => 
-      prevData.map(row => getOperationId(row) === operationId 
-        ? headers.map(header => editedData[header] || '')
-        : row
-      )
-    );
-    setEditingRow(null);
-    setEditedData({});
-  };
-
-  // Fonctions de gestion des colonnes
-  const handleFilterChange = (header: string, value: string): void => {
-    setFilters(prev => ({
-      ...prev,
-      [header]: value
-    }));
-  };
-
-  const handleColumnVisibilityChange = (columnIndex: number): void => {
-    setColumnVisibility(prev => 
-      prev.map(col => 
-        col.index === columnIndex 
-          ? { ...col, visible: !col.visible }
-          : col
-      )
-    );
-  };
-
-  const getVisibleColumns = (): number[] => {
-    return columnVisibility
-      .filter(col => col.visible)
-      .map(col => col.index);
-  };
-
-  const resetColumnVisibility = (): void => {
-    setColumnVisibility(prev => 
-      prev.map((col, index) => ({
-        ...col,
-        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
-      }))
-    );
+    XLSX.utils.book_append_sheet(wb, ws, "Operations");
+    const fileName = `operations_${selectedDate || new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
   };
 
   // Filtrage des données
@@ -706,121 +693,77 @@ const CSVViewer: React.FC = () => {
     setDraggedTask(null);
   }, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
 
+  // Fonctions d'édition
+  const handleInputChange = (header: string, value: string): void => {
+    setEditedData(prev => ({
+      ...prev,
+      [header]: value
+    }));
+  };
+
+  const handleEditClick = (row: string[]): void => {
+    const operationId = getOperationId(row);
+    setEditingRow(operationId);
+    const rowData: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      rowData[header] = row[index] || '';
+    });
+    setEditedData(rowData);
+  };
+
+  const handleCancelEdit = (): void => {
+    setEditingRow(null);
+    setEditedData({});
+  };
+
+  const handleSaveEdit = (operationId: string): void => {
+    setData(prevData => 
+      prevData.map(row => getOperationId(row) === operationId 
+        ? headers.map(header => editedData[header] || '')
+        : row
+      )
+    );
+    setEditingRow(null);
+    setEditedData({});
+  };
+
   const handleTaskClick = (operationId: string): void => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
-  // Gestion des fichiers
-const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = event.target.files?.[0];
-    if (!file) return;
 
-    parse(file, {
-      complete: (results: CSVResult) => {
-        const processedData = results.data.slice(1)
-          .filter((row: string[]) => row.some(cell => cell))
-          .map((row: string[]) => {
-            const updatedRow = [...row];
-            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
-
-            // Correction des dates
-            if (updatedRow[2] && updatedRow[4]) {
-              let startDate = new Date(updatedRow[2]);
-              startDate = correctDate(startDate);
-              updatedRow[2] = startDate.toISOString().split('T')[0];
-
-              let endDate = new Date(updatedRow[4]);
-              endDate = correctDate(endDate);
-              updatedRow[4] = endDate.toISOString().split('T')[0];
-            }
-            return updatedRow;
-          });
-
-        setData(processedData);
-        setHeaders(results.data[0]);
-
-        // Mise à jour des dates et des techniciens
-        const allDates = new Set<string>();
-        const technicianSet = new Set<string>();
-
-        processedData.forEach((row: string[]) => {
-          if (row[2] && row[4]) {
-            const startDate = correctDate(new Date(row[2]));
-            const endDate = correctDate(new Date(row[4]));
-            const dates = generateDateRange(startDate, endDate);
-            dates.forEach(date => allDates.add(date));
-          }
-          if (row[15]) {
-            technicianSet.add(row[15].trim());
-          }
-        });
-
-        setUniqueDates(Array.from(allDates).sort());
-        
-        const sortedTechnicians = Array.from(technicianSet)
-          .filter(tech => tech && tech !== "Sans technicien")
-          .sort((a, b) => a.localeCompare(b));
-
-        if (technicianSet.has("Sans technicien")) {
-          sortedTechnicians.push("Sans technicien");
-        }
-
-        setAllTechnicians(sortedTechnicians);
-      },
-      error: (error: Error) => {
-        console.error('Erreur lors de la lecture du fichier:', error);
-      }
-    });
+  // Gestion des colonnes
+  const handleColumnVisibilityChange = (columnIndex: number): void => {
+    setColumnVisibility(prev => 
+      prev.map(col => 
+        col.index === columnIndex 
+          ? { ...col, visible: !col.visible }
+          : col
+      )
+    );
   };
 
-  const handleExportExcel = (): void => {
-    const dataToExport = (isFiltering ? filteredData : data).map(row => {
-      const formattedRow = [...row];
-      
-      if (row[2]) {
-        const date = new Date(row[2]);
-        formattedRow[2] = date.toLocaleDateString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
-      }
-      if (row[4]) {
-        const date = new Date(row[4]);
-        formattedRow[4] = date.toLocaleDateString('fr-FR', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        });
-      }
-      
-      return formattedRow;
-    });
-    
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataToExport]);
-    
-    ws['!cols'] = headers.map((_, index) => {
-      return index === 2 || index === 4 ? { wch: 12 } : { wch: 15 };
-    });
-
-    XLSX.utils.book_append_sheet(wb, ws, "Operations");
-    const fileName = `operations_${selectedDate || new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+  const getVisibleColumns = (): number[] => {
+    return columnVisibility
+      .filter(col => col.visible)
+      .map(col => col.index);
   };
 
-  const downloadCSV = (content: string, fileName: string): void => {
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+  const handleFilterChange = (header: string, value: string): void => {
+    setFilters(prev => ({
+      ...prev,
+      [header]: value
+    }));
   };
 
-  // Fonctions de rendu auxiliaires
+  const resetColumnVisibility = (): void => {
+    setColumnVisibility(prev => 
+      prev.map((col, index) => ({
+        ...col,
+        visible: [0,1,2,3,4,5,10,11,15,16].includes(index)
+      }))
+    );
+  };
+  // Composants de rendu de base
   const renderCell = (row: string[], cell: string, header: string, index: number): React.ReactNode => {
     const operationId = getOperationId(row);
     const isEditing = editingRow === operationId;
@@ -847,7 +790,7 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     }
     return cell || '';
   };
-  // Composants de rendu
+
   const renderNewOperationDialog = (): React.ReactNode => {
     return (
       <Dialog open={isNewOperationDialogOpen} onOpenChange={setIsNewOperationDialogOpen}>
@@ -1015,25 +958,6 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     );
   };
 
-  const getDragMessage = (): React.ReactNode => {
-    if (!draggedTask) return null;
-
-    const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
-
-    return (
-      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
-        {isUnassigned ? (
-          "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
-        ) : draggedTask.task[2] !== selectedDate ? (
-          <span className="text-red-600">
-            Impossible de déplacer une tâche en dehors de sa période ({formatDate(draggedTask.task[2])})
-          </span>
-        ) : (
-          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
-        )}
-      </div>
-    );
-  };
   const renderTechnicianInput = (): React.ReactNode => {
     return (
       <div className="flex gap-2 w-full items-center">
@@ -1068,54 +992,6 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
       </div>
     );
   };
-
-  const renderTopActions = (): React.ReactNode => {
-    return (
-      <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
-        <input 
-          type="file" 
-          onChange={handleFileUpload} 
-          accept=".csv" 
-          className="flex-1"
-        />
-        <Button
-          onClick={() => setIsNewOperationDialogOpen(true)}
-          className="gap-2"
-        >
-          <PlusCircle className="h-4 w-4" />
-          Nouvelle opération
-        </Button>
-        <Button
-          onClick={handleExportExcel}
-          className="gap-2"
-          variant="outline"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Exporter Excel
-        </Button>
-      </div>
-    );
-  };
-
-  const renderFilterReset = (): React.ReactNode => {
-    if (!selectedTask) return null;
-
-    return (
-      <div className="flex items-center justify-end mb-4">
-        <Button
-          onClick={() => setSelectedTask(null)}
-          variant="destructive"
-          className="flex items-center gap-2"
-        >
-          <X className="h-4 w-4" />
-          Réinitialiser le filtre
-        </Button>
-      </div>
-    );
-  };
-
   const renderTable = (dataToRender: string[][]): React.ReactNode => {
     const visibleColumns = getVisibleColumns();
     
@@ -1222,7 +1098,8 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
       </div>
     );
   };
-const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false): React.ReactNode => {
+
+  const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false): React.ReactNode => {
     return (
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -1261,6 +1138,72 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false):
     );
   };
 
+  const getDragMessage = (): React.ReactNode => {
+    if (!draggedTask) return null;
+
+    const isUnassigned = !draggedTask.startDate || !draggedTask.endDate;
+
+    return (
+      <div className="fixed bottom-4 right-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-lg shadow-lg">
+        {isUnassigned ? (
+          "Glissez la tâche sur une ligne pour l'affecter à la date sélectionnée"
+        ) : draggedTask.task[2] !== selectedDate ? (
+          <span className="text-red-600">
+            Impossible de déplacer une tâche en dehors de sa période ({formatDate(draggedTask.task[2])})
+          </span>
+        ) : (
+          "Glissez la tâche sur une ligne pour réaffecter au technicien correspondant"
+        )}
+      </div>
+    );
+  };
+
+  const renderTopActions = (): React.ReactNode => {
+    return (
+      <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+        <input 
+          type="file" 
+          onChange={handleFileUpload} 
+          accept=".csv" 
+          className="flex-1"
+        />
+        <Button
+          onClick={() => setIsNewOperationDialogOpen(true)}
+          className="gap-2"
+        >
+          <PlusCircle className="h-4 w-4" />
+          Nouvelle opération
+        </Button>
+        <Button
+          onClick={handleExportExcel}
+          className="gap-2"
+          variant="outline"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Exporter Excel
+        </Button>
+      </div>
+    );
+  };
+
+  const renderFilterReset = (): React.ReactNode => {
+    if (!selectedTask) return null;
+
+    return (
+      <div className="flex items-center justify-end mb-4">
+        <Button
+          onClick={() => setSelectedTask(null)}
+          variant="destructive"
+          className="flex items-center gap-2"
+        >
+          <X className="h-4 w-4" />
+          Réinitialiser le filtre
+        </Button>
+      </div>
+    );
+  };
   const renderGanttChart = (groupBy: string): React.ReactNode => {
     if (!selectedDate) {
       return <p>Veuillez sélectionner une date</p>;
@@ -1415,6 +1358,7 @@ const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false):
       </div>
     );
   };
+
   // Rendu final du composant
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
