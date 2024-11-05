@@ -664,7 +664,7 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
   }, [draggedTask, selectedDate, updateAssignment, assignDateToTask]);
 
   // Gestion des fichiers CSV
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -676,10 +676,16 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
             const updatedRow = [...row];
             updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
 
+            // Correction du traitement des dates pour éviter le décalage
             if (updatedRow[2] && updatedRow[4]) {
+              // Pour la date de début (index 2)
               const startDate = new Date(updatedRow[2]);
-              const endDate = new Date(updatedRow[4]);
+              startDate.setMinutes(startDate.getMinutes() + startDate.getTimezoneOffset());
               updatedRow[2] = startDate.toISOString().split('T')[0];
+
+              // Pour la date de fin (index 4)
+              const endDate = new Date(updatedRow[4]);
+              endDate.setMinutes(endDate.getMinutes() + endDate.getTimezoneOffset());
               updatedRow[4] = endDate.toISOString().split('T')[0];
             }
             return updatedRow;
@@ -694,8 +700,11 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
 
         processedData.forEach((row: string[]) => {
           if (row[2] && row[4]) {
+            // Utiliser les dates corrigées pour générer la plage
             const startDate = new Date(row[2]);
+            startDate.setMinutes(startDate.getMinutes() + startDate.getTimezoneOffset());
             const endDate = new Date(row[4]);
+            endDate.setMinutes(endDate.getMinutes() + endDate.getTimezoneOffset());
             const dates = generateDateRange(startDate, endDate);
             dates.forEach(date => allDates.add(date));
           }
@@ -722,8 +731,41 @@ const groupDataByType = useCallback((groupBy: string, filteredDataForDate: strin
     });
   };
 
-  const handleTaskClick = (operationId: string): void => {
-    setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
+  // Modification de la fonction handleCreateOperation pour gérer correctement les dates
+  const handleCreateOperation = () => {
+    const newRow = new Array(headers.length).fill('');
+    newRow[0] = newOperation.vehicule;
+    newRow[1] = newOperation.description;
+    
+    // Correction des dates pour la nouvelle opération
+    const startDate = new Date(newOperation.dateDebut);
+    startDate.setMinutes(startDate.getMinutes() + startDate.getTimezoneOffset());
+    newRow[2] = startDate.toISOString().split('T')[0];
+    newRow[3] = newOperation.heureDebut;
+    
+    const endDate = new Date(newOperation.dateFin);
+    endDate.setMinutes(endDate.getMinutes() + endDate.getTimezoneOffset());
+    newRow[4] = endDate.toISOString().split('T')[0];
+    newRow[5] = newOperation.heureFin;
+    
+    newRow[10] = newOperation.lieu;
+    newRow[15] = newOperation.technicien || "Sans technicien";
+
+    setData(prevData => [...prevData, newRow]);
+
+    if (newOperation.dateDebut && newOperation.dateFin) {
+      const newDates = generateDateRange(
+        startDate,
+        endDate
+      );
+      setUniqueDates(prevDates => {
+        const allDates = new Set([...prevDates, ...newDates]);
+        return Array.from(allDates).sort();
+      });
+    }
+
+    setNewOperation(initialNewOperation);
+    setIsNewOperationDialogOpen(false);
   };
 
 
