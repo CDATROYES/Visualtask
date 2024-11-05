@@ -100,6 +100,23 @@ const formatDate = (dateStr: string): string => {
   
   return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
 };
+
+// Fonction utilitaire pour corriger les dates (à ajouter)
+const correctDate = (date: Date): Date => {
+  return new Date(date.getTime() + date.getTimezoneOffset() * 60000);
+};
+
+// Fonction de formatage des dates (à remplacer)
+const formatDate = (dateStr: string): string => {
+  const date = correctDate(new Date(dateStr));
+  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  
+  return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
+};
+
+
 // Début du composant principal
 const CSVViewer: React.FC = () => {
   // États du composant
@@ -144,6 +161,38 @@ const CSVViewer: React.FC = () => {
     }
   }, [headers]);
 
+const CSVViewer: React.FC = () => {
+  // ... états et useEffects ...
+
+  // Fonctions utilitaires de base
+  const isSameDay = (date1: string, date2: string): boolean => {
+    if (!date1 || !date2) return false;
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    const correctedD1 = correctDate(d1);
+    const correctedD2 = correctDate(d2);
+    return correctedD1.getFullYear() === correctedD2.getFullYear() &&
+           correctedD1.getMonth() === correctedD2.getMonth() &&
+           correctedD1.getDate() === correctedD2.getDate();
+  };
+
+  const generateDateRange = (start: Date, end: Date): string[] => {
+    const dates: string[] = [];
+    const current = new Date(start);
+    current.setHours(0, 0, 0, 0);
+    const endDate = new Date(end);
+    endDate.setHours(23, 59, 59, 999);
+    
+    while (current <= endDate) {
+      const correctedDate = correctDate(current);
+      dates.push(correctedDate.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
+    }
+    
+    return dates;
+  };
+
+
   // Fonctions utilitaires de base
   const isSameDay = (date1: string, date2: string): boolean => {
     if (!date1 || !date2) return false;
@@ -185,14 +234,14 @@ const CSVViewer: React.FC = () => {
     newRow[0] = newOperation.vehicule;
     newRow[1] = newOperation.description;
     
-    // Correction des dates avec UTC
-    const startDate = new Date(newOperation.dateDebut);
-    startDate.setUTCHours(12, 0, 0, 0);
+    // Correction des dates pour la nouvelle opération
+    let startDate = new Date(newOperation.dateDebut);
+    startDate = correctDate(startDate);
     newRow[2] = startDate.toISOString().split('T')[0];
     newRow[3] = newOperation.heureDebut;
     
-    const endDate = new Date(newOperation.dateFin);
-    endDate.setUTCHours(12, 0, 0, 0);
+    let endDate = new Date(newOperation.dateFin);
+    endDate = correctDate(endDate);
     newRow[4] = endDate.toISOString().split('T')[0];
     newRow[5] = newOperation.heureFin;
     
@@ -661,7 +710,7 @@ const CSVViewer: React.FC = () => {
     setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
   };
   // Gestion des fichiers
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -673,14 +722,14 @@ const CSVViewer: React.FC = () => {
             const updatedRow = [...row];
             updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
 
-            // Correction des dates pour éviter le décalage
+            // Correction des dates
             if (updatedRow[2] && updatedRow[4]) {
-              const startDate = new Date(updatedRow[2]);
-              startDate.setUTCHours(12, 0, 0, 0);
+              let startDate = new Date(updatedRow[2]);
+              startDate = correctDate(startDate);
               updatedRow[2] = startDate.toISOString().split('T')[0];
 
-              const endDate = new Date(updatedRow[4]);
-              endDate.setUTCHours(12, 0, 0, 0);
+              let endDate = new Date(updatedRow[4]);
+              endDate = correctDate(endDate);
               updatedRow[4] = endDate.toISOString().split('T')[0];
             }
             return updatedRow;
@@ -695,8 +744,8 @@ const CSVViewer: React.FC = () => {
 
         processedData.forEach((row: string[]) => {
           if (row[2] && row[4]) {
-            const startDate = new Date(row[2]);
-            const endDate = new Date(row[4]);
+            const startDate = correctDate(new Date(row[2]));
+            const endDate = correctDate(new Date(row[4]));
             const dates = generateDateRange(startDate, endDate);
             dates.forEach(date => allDates.add(date));
           }
