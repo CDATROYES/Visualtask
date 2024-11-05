@@ -1,4 +1,6 @@
+export {};
 'use client';
+
 import * as XLSX from 'xlsx';
 import React, { useState, useEffect, useCallback } from 'react';
 import { parse, unparse } from 'papaparse';
@@ -8,7 +10,6 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
 // Interfaces principales
 interface ColumnVisibility {
   index: number;
