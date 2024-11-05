@@ -110,15 +110,7 @@ const formatDate = (dateStr: string): string => {
   
   return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
 };
-// Fonction de formatage des dates
-const formatDate = (dateStr: string): string => {
-  const date = correctDate(new Date(dateStr));
-  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
-  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-                'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-  
-  return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
-};
+
 // Début du composant principal
 const CSVViewer: React.FC = () => {
   // États du composant
