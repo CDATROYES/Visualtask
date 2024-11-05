@@ -1173,7 +1173,199 @@ const CSVViewer: React.FC = () => {
       </div>
     );
   };
+const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false): React.ReactNode => {
+    return (
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+          {renderDateSelector()}
+          {showTechnicianInput && renderTechnicianInput()}
+        </div>
 
+        <div className="space-y-6">
+          <div className="relative bg-white rounded-lg shadow-sm">
+            {renderGanttChart(groupBy)}
+          </div>
+          
+          {draggedTask && getDragMessage()}
+          
+          <div className="text-sm text-gray-500 italic space-y-1">
+            {showTechnicianInput && (
+              <p>Les tâches sans technicien sont affichées en rouge au bas du planning.</p>
+            )}
+            <p>Les tâches sur plusieurs jours sont indiquées par des bordures spéciales.</p>
+            <p>Les tâches non planifiées sont affichées en jaune et peuvent être glissées sur le planning pour leur assigner une date.</p>
+          </div>
+
+          {selectedDate && (
+            <div className="mt-8 border-t-2 border-gray-200 pt-8">
+              {renderFilterReset()}
+              <h3 className="text-lg font-semibold mb-4">
+                {selectedTask 
+                  ? "Détails de l'opération sélectionnée"
+                  : `Détails des opérations pour le ${formatDate(selectedDate)}`}
+              </h3>
+              {renderTable(filterDataForDate(selectedDate, selectedTask))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderGanttChart = (groupBy: string): React.ReactNode => {
+    if (!selectedDate) {
+      return <p>Veuillez sélectionner une date</p>;
+    }
+
+    const BASE_ROW_HEIGHT = 60;
+    const HEADER_HEIGHT = 40;
+    const TASK_HEIGHT = 20;
+    const TASK_MARGIN = 4;
+    const MIN_ROW_HEIGHT = BASE_ROW_HEIGHT;
+
+    const filteredDataForDate = filterDataForDate(selectedDate);
+    const { groups = [], groupIndex = 0, labelIndex = 0, unassignedTasks = [] } = 
+      groupDataByType(groupBy, filteredDataForDate) || {};
+
+    if (!groups.length && !unassignedTasks.length && groupBy !== 'Technicien') {
+      return <p>Aucune donnée à afficher pour cette date</p>;
+    }
+
+    const groupedData: GanttChartData[] = groups.map(group => {
+      let tasks: TaskData[];
+      
+      if (group === "Non affectées") {
+        tasks = unassignedTasks.map(task => {
+          const hasTime = Boolean(task[3] && task[5]);
+          
+          return {
+            task,
+            startPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+            duration: hasTime ? calculateDuration(task[3], task[5]) : 4.17,
+            operationId: getOperationId(task),
+            isMultiDay: false,
+            isStart: true,
+            isEnd: true,
+            isUnassigned: true,
+            dayStartPercentage: hasTime ? getTimePercentage(task[3]) : 33.33,
+            dayEndPercentage: hasTime ? getTimePercentage(task[5]) : 37.50
+          };
+        });
+      } else {
+        tasks = filteredDataForDate
+          .filter(row => row && row[groupIndex] === group)
+          .map(task => {
+            const hasStartAndEnd = Boolean(task[2] && task[4]);
+            const isMultiDay = hasStartAndEnd ? !isSameDay(task[2], task[4]) : false;
+            const isStart = hasStartAndEnd ? isSameDay(task[2], selectedDate) : false;
+            const isEnd = hasStartAndEnd ? isSameDay(task[4], selectedDate) : false;
+
+            const { dayStartPercentage, dayEndPercentage } = calculateDayPercentages(task, selectedDate);
+
+            return {
+              task,
+              startPercentage: getTimePercentage(task[3]),
+              duration: calculateDuration(task[3], task[5]),
+              operationId: getOperationId(task),
+              isMultiDay,
+              isStart,
+              isEnd,
+              isUnassigned: false,
+              dayStartPercentage,
+              dayEndPercentage
+            };
+          });
+      }
+
+      const overlaps = detectOverlaps(tasks);
+      const maxOverlap = Math.max(0, ...Array.from(overlaps.values()));
+      const rowHeight = Math.max(MIN_ROW_HEIGHT, (maxOverlap + 1) * (TASK_HEIGHT + TASK_MARGIN) + TASK_MARGIN * 2);
+
+      return {
+        group,
+        tasks,
+        overlaps,
+        rowHeight,
+        isUnassignedGroup: group === "Non affectées"
+      };
+    });
+
+    return (
+      <div style={{ overflowX: 'auto', width: '100%' }}>
+        <div style={{ display: 'flex', minWidth: '1000px' }}>
+          <div className="sticky left-0 z-10" style={{ width: '200px', borderRight: '2px solid #333', backgroundColor: '#f0f0f0' }}>
+            <div style={{ height: `${HEADER_HEIGHT}px`, borderBottom: '2px solid #333', padding: '0 10px' }} 
+                 className="flex items-center font-bold">
+              {groupBy}
+            </div>
+            {groupedData.map(({ group, rowHeight, isUnassignedGroup }, index) => (
+              <div 
+                key={group} 
+                style={{ height: `${rowHeight}px` }}
+                className={`
+                  flex items-center px-2.5 border-b border-gray-200
+                  ${isUnassignedGroup ? 'bg-yellow-50' : index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                  ${group === 'Sans technicien' ? 'text-red-500' : ''}
+                `}
+              >
+                {group || 'N/A'}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, position: 'relative' }}>
+            {renderTimeHeader({ HEADER_HEIGHT })}
+            {groupedData.map(({ group, tasks, overlaps, rowHeight, isUnassignedGroup }, index) => (
+              <div 
+                key={group}
+                style={{ height: `${rowHeight}px` }}
+                className={`
+                  relative border-b border-gray-200
+                  ${dropZoneActive === group ? 'bg-blue-50' : 
+                    isUnassignedGroup ? 'bg-yellow-50' : 
+                    index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}
+                `}
+                onDragOver={handleDragOver}
+                onDragEnter={(e) => handleDragEnter(e, group)}
+                onDragLeave={(e) => handleDragLeave(e, group)}
+                onDrop={(e) => handleDrop(group, e)}
+              >
+                {tasks.map((taskData) => (
+                  <div
+                    key={`${taskData.operationId}_${selectedDate}`}
+                    draggable={true}
+                    onDragStart={(e) => handleDragStart(e, taskData)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => handleTaskClick(taskData.operationId)}
+                    style={{
+                      position: 'absolute',
+                      left: `${taskData.dayStartPercentage ?? taskData.startPercentage}%`,
+                      width: `${(taskData.dayEndPercentage ?? (taskData.startPercentage + taskData.duration)) - 
+                              (taskData.dayStartPercentage ?? taskData.startPercentage)}%`,
+                      height: `${TASK_HEIGHT}px`,
+                      top: TASK_MARGIN + ((overlaps.get(taskData.operationId) || 0) * (TASK_HEIGHT + TASK_MARGIN)),
+                      backgroundColor: taskData.isUnassigned ? '#FCD34D' : getUniqueColor(tasks.indexOf(taskData)),
+                      cursor: 'pointer',
+                      outline: selectedTask === taskData.operationId ? '2px solid yellow' : undefined,
+                      boxShadow: selectedTask === taskData.operationId ? '0 0 0 2px yellow' : undefined,
+                    }}
+                    className={`
+                      rounded px-1 text-xs text-white overflow-hidden whitespace-nowrap select-none
+                      hover:brightness-90 transition-all duration-200
+                      ${taskData.isUnassigned ? 'text-black' : ''}
+                      ${taskData.isMultiDay ? 'border-2 border-blue-300' : ''}
+                    `}
+                  >
+                    {`${taskData.task[0] || 'N/A'} - ${taskData.task[1] || 'N/A'}`}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
   // Rendu final du composant
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gray-50">
