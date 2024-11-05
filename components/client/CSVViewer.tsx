@@ -95,9 +95,21 @@ const initialNewOperation: NewOperation = {
 
 // Fonction utilitaire pour corriger les dates
 const correctDate = (date: Date): Date => {
-  return new Date(date.getTime() + date.getTimezoneOffset() * 60000);
+  const correctedDate = new Date(date.getTime());
+  correctedDate.setHours(12, 0, 0, 0); // On fixe l'heure à midi pour éviter les problèmes de fuseau horaire
+  return correctedDate;
 };
 
+// Fonction de formatage des dates
+const formatDate = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  date.setHours(12, 0, 0, 0);
+  const jours = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const mois = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  
+  return `${jours[date.getDay()]} ${date.getDate()} ${mois[date.getMonth()]}`;
+};
 // Fonction de formatage des dates
 const formatDate = (dateStr: string): string => {
   const date = correctDate(new Date(dateStr));
@@ -152,16 +164,16 @@ const CSVViewer: React.FC = () => {
   }, [headers]);
 
   // Fonctions utilitaires de base
-  const isSameDay = (date1: string, date2: string): boolean => {
+const isSameDay = (date1: string, date2: string): boolean => {
     if (!date1 || !date2) return false;
     const d1 = new Date(date1);
+    d1.setHours(12, 0, 0, 0);
     const d2 = new Date(date2);
-    const correctedD1 = correctDate(d1);
-    const correctedD2 = correctDate(d2);
-    return correctedD1.getFullYear() === correctedD2.getFullYear() &&
-           correctedD1.getMonth() === correctedD2.getMonth() &&
-           correctedD1.getDate() === correctedD2.getDate();
-  };
+    d2.setHours(12, 0, 0, 0);
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+};
 
   const getOperationId = (task: string[]): string => {
     return `${task[0]}_${task[1]}_${task[2] || 'unassigned'}_${task[4] || 'unassigned'}`;
@@ -172,21 +184,20 @@ const CSVViewer: React.FC = () => {
     return `hsl(${hue}, 70%, 50%)`;
   };
 
-  const generateDateRange = (start: Date, end: Date): string[] => {
-    const dates: string[] = [];
-    const current = new Date(start);
-    current.setUTCHours(0, 0, 0, 0);
-    const endDate = new Date(end);
-    endDate.setUTCHours(23, 59, 59, 999);
-    
-    while (current <= endDate) {
-      const correctedDate = correctDate(current);
-      dates.push(correctedDate.toISOString().split('T')[0]);
-      current.setDate(current.getDate() + 1);
-    }
-    
-    return dates;
-  };
+const generateDateRange = (start: Date, end: Date): string[] => {
+  const dates: string[] = [];
+  const current = new Date(start);
+  current.setHours(12, 0, 0, 0);
+  const endDate = new Date(end);
+  endDate.setHours(12, 0, 0, 0);
+  
+  while (current <= endDate) {
+    dates.push(current.toISOString().split('T')[0]);
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return dates;
+};
 
   const getTimePercentage = (time: string): number => {
     if (!time) return 33.33; // 8:00 par défaut
@@ -301,14 +312,15 @@ const CSVViewer: React.FC = () => {
     newRow[0] = newOperation.vehicule;
     newRow[1] = newOperation.description;
     
-    // Correction des dates pour la nouvelle opération
-    let startDate = new Date(newOperation.dateDebut);
-    startDate = correctDate(startDate);
+    // Date de début
+    const startDate = new Date(newOperation.dateDebut);
+    startDate.setHours(12, 0, 0, 0);
     newRow[2] = startDate.toISOString().split('T')[0];
     newRow[3] = newOperation.heureDebut;
     
-    let endDate = new Date(newOperation.dateFin);
-    endDate = correctDate(endDate);
+    // Date de fin
+    const endDate = new Date(newOperation.dateFin);
+    endDate.setHours(12, 0, 0, 0);
     newRow[4] = endDate.toISOString().split('T')[0];
     newRow[5] = newOperation.heureFin;
     
@@ -327,43 +339,7 @@ const CSVViewer: React.FC = () => {
 
     setNewOperation(initialNewOperation);
     setIsNewOperationDialogOpen(false);
-  };
-
-  const validateNewOperation = (): boolean => {
-    const {
-      vehicule,
-      description,
-      dateDebut,
-      heureDebut,
-      dateFin,
-      heureFin,
-      lieu
-    } = newOperation;
-
-    if (!vehicule || !description || !dateDebut || !dateFin || !lieu) {
-      return false;
-    }
-
-    const start = new Date(`${dateDebut}T${heureDebut}`);
-    const end = new Date(`${dateFin}T${heureFin}`);
-
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleNewOperationChange = (
-    field: keyof NewOperation,
-    value: string
-  ): void => {
-    setNewOperation(prev => ({
-      ...prev,
-      [field]: value,
-      ...(field === 'dateDebut' && !prev.dateFin && { dateFin: value })
-    }));
-  };
+};
 
   const assignDateToTask = (task: string[], targetDate: string): string[] => {
     const updatedTask = [...task];
@@ -474,12 +450,14 @@ const CSVViewer: React.FC = () => {
 
             // Correction des dates
             if (updatedRow[2] && updatedRow[4]) {
-              let startDate = new Date(updatedRow[2]);
-              startDate = correctDate(startDate);
+              // Date de début
+              const startDate = new Date(updatedRow[2]);
+              startDate.setHours(12, 0, 0, 0);
               updatedRow[2] = startDate.toISOString().split('T')[0];
 
-              let endDate = new Date(updatedRow[4]);
-              endDate = correctDate(endDate);
+              // Date de fin
+              const endDate = new Date(updatedRow[4]);
+              endDate.setHours(12, 0, 0, 0);
               updatedRow[4] = endDate.toISOString().split('T')[0];
             }
             return updatedRow;
@@ -494,8 +472,10 @@ const CSVViewer: React.FC = () => {
 
         processedData.forEach((row: string[]) => {
           if (row[2] && row[4]) {
-            const startDate = correctDate(new Date(row[2]));
-            const endDate = correctDate(new Date(row[4]));
+            const startDate = new Date(row[2]);
+            startDate.setHours(12, 0, 0, 0);
+            const endDate = new Date(row[4]);
+            endDate.setHours(12, 0, 0, 0);
             const dates = generateDateRange(startDate, endDate);
             dates.forEach(date => allDates.add(date));
           }
@@ -520,7 +500,7 @@ const CSVViewer: React.FC = () => {
         console.error('Erreur lors de la lecture du fichier:', error);
       }
     });
-  };
+};
 
   const handleExportExcel = (): void => {
     const dataToExport = (isFiltering ? filteredData : data).map(row => {
