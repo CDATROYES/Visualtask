@@ -178,28 +178,36 @@ const CSVViewer: React.FC = () => {
     
     return dates;
   };
-  // Fonction pour créer une nouvelle opération
-  const handleCreateOperation = () => {
+
+    setNewOperation(initialNewOperation);
+    setIsNewOperationDialogOpen(false);
+  };
+
+	// Supprimez la définition dupliquée et gardez une seule version de handleCreateOperation
+const handleCreateOperation = () => {
+    // Créer un nouvel array avec les données de l'opération
     const newRow = new Array(headers.length).fill('');
     newRow[0] = newOperation.vehicule;
     newRow[1] = newOperation.description;
     
-    // Correction des dates pour la nouvelle opération
+    // Correction des dates avec UTC
     const startDate = new Date(newOperation.dateDebut);
-    startDate.setMinutes(startDate.getMinutes() + startDate.getTimezoneOffset());
+    startDate.setUTCHours(12, 0, 0, 0);
     newRow[2] = startDate.toISOString().split('T')[0];
     newRow[3] = newOperation.heureDebut;
     
     const endDate = new Date(newOperation.dateFin);
-    endDate.setMinutes(endDate.getMinutes() + endDate.getTimezoneOffset());
+    endDate.setUTCHours(12, 0, 0, 0);
     newRow[4] = endDate.toISOString().split('T')[0];
     newRow[5] = newOperation.heureFin;
     
     newRow[10] = newOperation.lieu;
     newRow[15] = newOperation.technicien || "Sans technicien";
 
+    // Ajouter la nouvelle opération aux données
     setData(prevData => [...prevData, newRow]);
 
+    // Mettre à jour les dates uniques si nécessaire
     if (newOperation.dateDebut && newOperation.dateFin) {
       const newDates = generateDateRange(startDate, endDate);
       setUniqueDates(prevDates => {
@@ -208,9 +216,11 @@ const CSVViewer: React.FC = () => {
       });
     }
 
+    // Réinitialiser le formulaire
     setNewOperation(initialNewOperation);
     setIsNewOperationDialogOpen(false);
-  };
+};
+
 
   const handleNewOperationChange = (
     field: keyof NewOperation,
@@ -594,39 +604,7 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     });
 };
 
-// Création d'une nouvelle opération avec correction des dates
-const handleCreateOperation = () => {
-    const newRow = new Array(headers.length).fill('');
-    newRow[0] = newOperation.vehicule;
-    newRow[1] = newOperation.description;
-    
-    // Correction des dates pour la nouvelle opération
-    const startDate = new Date(newOperation.dateDebut);
-    startDate.setUTCHours(12, 0, 0, 0);
-    newRow[2] = startDate.toISOString().split('T')[0];
-    newRow[3] = newOperation.heureDebut;
-    
-    const endDate = new Date(newOperation.dateFin);
-    endDate.setUTCHours(12, 0, 0, 0);
-    newRow[4] = endDate.toISOString().split('T')[0];
-    newRow[5] = newOperation.heureFin;
-    
-    newRow[10] = newOperation.lieu;
-    newRow[15] = newOperation.technicien || "Sans technicien";
 
-    setData(prevData => [...prevData, newRow]);
-
-    if (newOperation.dateDebut && newOperation.dateFin) {
-      const newDates = generateDateRange(startDate, endDate);
-      setUniqueDates(prevDates => {
-        const allDates = new Set([...prevDates, ...newDates]);
-        return Array.from(allDates).sort();
-      });
-    }
-
-    setNewOperation(initialNewOperation);
-    setIsNewOperationDialogOpen(false);
-};
 
   // Filtrage des données
   const filteredData = data.filter(row => {
