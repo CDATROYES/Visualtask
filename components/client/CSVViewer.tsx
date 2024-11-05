@@ -714,6 +714,35 @@ const generateDateRange = (start: Date, end: Date): string[] => {
   }));
 };
 
+const validateNewOperation = (): boolean => {
+  const {
+    vehicule,
+    description,
+    dateDebut,
+    heureDebut,
+    dateFin,
+    heureFin,
+    lieu
+  } = newOperation;
+
+  if (!vehicule || !description || !dateDebut || !dateFin || !lieu) {
+    return false;
+  }
+
+  const start = new Date(`${dateDebut}T${heureDebut}`);
+  const end = new Date(`${dateFin}T${heureFin}`);
+
+  start.setHours(12, 0, 0, 0);
+  end.setHours(12, 0, 0, 0);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
+    return false;
+  }
+
+  return true;
+};
+
+
 const handleCreateOperation = (): void => {
   const newRow = new Array(headers.length).fill('');
   newRow[0] = newOperation.vehicule;
