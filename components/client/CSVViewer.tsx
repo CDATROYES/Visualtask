@@ -1258,35 +1258,35 @@ const handleCreateOperation = (): void => {
     );
   };
 
-  const renderTopActions = (): React.ReactNode => {
-    return (
-      <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
-        <input 
-          type="file" 
-          onChange={handleFileUpload} 
-          accept=".csv" 
-          className="flex-1"
-        />
-        <Button
-          onClick={() => setIsNewOperationDialogOpen(true)}
-          className="gap-2"
-        >
-          <PlusCircle className="h-4 w-4" />
-          Nouvelle opération
-        </Button>
-        <Button
-          onClick={handleExportExcel}
-          className="gap-2"
-          variant="outline"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Exporter Excel
-        </Button>
-      </div>
-    );
-  };
+const renderTopActions = (): React.ReactNode => {
+  return (
+    <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-sm">
+      <input 
+        type="file" 
+        onChange={handleFileUpload} 
+        accept=".xlsx,.xls" // Modification ici pour accepter les fichiers Excel
+        className="flex-1"
+      />
+      <Button
+        onClick={() => setIsNewOperationDialogOpen(true)}
+        className="gap-2"
+      >
+        <PlusCircle className="h-4 w-4" />
+        Nouvelle opération
+      </Button>
+      <Button
+        onClick={handleExportExcel}
+        className="gap-2"
+        variant="outline"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        Exporter Excel
+      </Button>
+    </div>
+  );
+};
 
   const renderFilterReset = (): React.ReactNode => {
     if (!selectedTask) return null;
