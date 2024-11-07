@@ -93,6 +93,60 @@ const initialNewOperation: NewOperation = {
   technicien: ''
 };
 
+const generateAllDatesInRange = (startDate: Date, endDate: Date): string[] => {
+  const dates: string[] = [];
+  const currentDate = new Date(startDate);
+  currentDate.setHours(12, 0, 0, 0);
+  
+  const endDateTime = new Date(endDate);
+  endDateTime.setHours(12, 0, 0, 0);
+
+  while (currentDate <= endDateTime) {
+    dates.push(currentDate.toISOString().split('T')[0]);
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return dates;
+};
+
+const findDateRange = (data: string[][]): { start: Date, end: Date } => {
+  let minDate: Date | null = null;
+  let maxDate: Date | null = null;
+
+  data.forEach(row => {
+    if (row[2]) {
+      const startDate = new Date(row[2]);
+      startDate.setHours(12, 0, 0, 0);
+      if (!minDate || startDate < minDate) {
+        minDate = startDate;
+      }
+    }
+    if (row[4]) {
+      const endDate = new Date(row[4]);
+      endDate.setHours(12, 0, 0, 0);
+      if (!maxDate || endDate > maxDate) {
+        maxDate = endDate;
+      }
+    }
+  });
+
+  // Si aucune date n'est trouvée, utiliser une période par défaut
+  if (!minDate || !maxDate) {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    minDate = new Date(today);
+    maxDate = new Date(today);
+    maxDate.setMonth(maxDate.getMonth() + 1);
+  }
+
+  // Étendre la plage de dates d'une semaine avant et après
+  minDate.setDate(minDate.getDate() - 7);
+  maxDate.setDate(maxDate.getDate() + 7);
+
+  return { start: minDate, end: maxDate };
+};
+
+
 // Fonction utilitaire pour corriger les dates
 const correctDate = (date: Date): Date => {
   const correctedDate = new Date(date.getTime());
@@ -425,26 +479,19 @@ const generateDateRange = (start: Date, end: Date): string[] => {
         setData(processedData);
         setHeaders(results.data[0]);
 
-        // Mise à jour des dates et des techniciens
-        const allDates = new Set<string>();
-        const technicianSet = new Set<string>();
+        // Trouver la plage de dates et générer toutes les dates
+        const { start, end } = findDateRange(processedData);
+        const allDates = generateAllDatesInRange(start, end);
+        setUniqueDates(allDates);
 
+        // Mise à jour des techniciens
+        const technicianSet = new Set<string>();
         processedData.forEach((row: string[]) => {
-          if (row[2] && row[4]) {
-            const startDate = new Date(row[2]);
-            startDate.setHours(12, 0, 0, 0);
-            const endDate = new Date(row[4]);
-            endDate.setHours(12, 0, 0, 0);
-            const dates = generateDateRange(startDate, endDate);
-            dates.forEach(date => allDates.add(date));
-          }
           if (row[15]) {
             technicianSet.add(row[15].trim());
           }
         });
 
-        setUniqueDates(Array.from(allDates).sort());
-        
         const sortedTechnicians = Array.from(technicianSet)
           .filter(tech => tech && tech !== "Sans technicien")
           .sort((a, b) => a.localeCompare(b));
@@ -459,7 +506,7 @@ const generateDateRange = (start: Date, end: Date): string[] => {
         console.error('Erreur lors de la lecture du fichier:', error);
       }
     });
-};
+  };
 
   const handleExportExcel = (): void => {
     const dataToExport = (isFiltering ? filteredData : data).map(row => {
