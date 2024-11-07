@@ -449,59 +449,66 @@ const generateDateRange = (start: Date, end: Date): string[] => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
 
+// Fonction utilitaire pour convertir le format spécial de date
+const convertSpecialDateFormat = (dateStr: string): string => {
+  if (!dateStr) return '';
+  
+  // Si la date est dans le format +YYYYYY-MM-DD
+  if (dateStr.match(/^\+\d{6}-\d{2}-\d{2}$/)) {
+    try {
+      // Enlever le '+' et convertir en format standard YYYY-MM-DD
+      const year = parseInt(dateStr.substring(1, 7), 10);
+      const month = dateStr.substring(8, 10);
+      const day = dateStr.substring(11, 13);
+      
+      // Créer une date en format ISO standard
+      return `${year}-${month}-${day}`;
+    } catch (err) {
+      console.error('Erreur lors de la conversion de la date:', err);
+      return dateStr;
+    }
+  }
+  
+  return dateStr;
+};
+
+// Modification du handleFileUpload pour utiliser la nouvelle fonction
 const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
   const file = event.target.files?.[0];
   if (!file) return;
 
-  // Création d'un FileReader pour lire le fichier Excel
   const reader = new FileReader();
   
   reader.onload = (e: ProgressEvent<FileReader>) => {
     try {
-      // Lecture du fichier Excel
       const data = e.target?.result;
       const workbook = XLSX.read(data, { type: 'binary' });
-      
-      // Récupération de la première feuille
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       
-      // Conversion en tableau
+      // Conversion en tableau avec les options raw: true pour obtenir les valeurs brutes
       const excelData = XLSX.utils.sheet_to_json<string[]>(worksheet, {
         header: 1,
-        defval: ''
+        defval: '',
+        raw: true
       });
 
-      // Séparation des en-têtes et des données
       const headers = excelData[0] as string[];
       const processedData = excelData.slice(1)
-        .filter((row: any[]) => row.some(cell => cell)) // Suppression des lignes vides
+        .filter((row: any[]) => row.some(cell => cell))
         .map((row: any[]) => {
-          // S'assurer que toutes les lignes ont le même nombre de colonnes
           const normalizedRow = [...Array(headers.length)].map((_, index) => 
             row[index]?.toString() || ''
           );
           
-          // Traitement spécifique pour certaines colonnes
           normalizedRow[15] = normalizedRow[15]?.trim() || "Sans technicien";
 
-          // Correction des dates
-          if (normalizedRow[2] && normalizedRow[4]) {
-            // Conversion des dates Excel en dates JavaScript
-            let startDate = new Date(normalizedRow[2]);
-            if (isNaN(startDate.getTime())) {
-              // Si la date n'est pas valide, essayer de la parser depuis le format Excel
-              startDate = XLSX.SSF.parse_date_code(normalizedRow[2]) || new Date();
-            }
-            startDate.setHours(12, 0, 0, 0);
-            normalizedRow[2] = startDate.toISOString().split('T')[0];
-
-            let endDate = new Date(normalizedRow[4]);
-            if (isNaN(endDate.getTime())) {
-              endDate = XLSX.SSF.parse_date_code(normalizedRow[4]) || new Date();
-            }
-            endDate.setHours(12, 0, 0, 0);
-            normalizedRow[4] = endDate.toISOString().split('T')[0];
+          // Conversion des dates spéciales
+          if (normalizedRow[2]) {
+            normalizedRow[2] = convertSpecialDateFormat(normalizedRow[2]);
+          }
+          if (normalizedRow[4]) {
+            normalizedRow[4] = convertSpecialDateFormat(normalizedRow[4]);
           }
 
           return normalizedRow;
@@ -543,7 +550,6 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     console.error('Erreur lors de la lecture du fichier:', error);
   };
 
-  // Lecture du fichier comme binary string
   reader.readAsBinaryString(file);
 };
 
