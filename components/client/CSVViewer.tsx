@@ -449,64 +449,103 @@ const generateDateRange = (start: Date, end: Date): string[] => {
     return { groups, groupIndex, labelIndex, unassignedTasks };
   }, [allTechnicians, data]);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
+  const file = event.target.files?.[0];
+  if (!file) return;
 
-    parse(file, {
-      complete: (results: CSVResult) => {
-        const processedData = results.data.slice(1)
-          .filter((row: string[]) => row.some(cell => cell))
-          .map((row: string[]) => {
-            const updatedRow = [...row];
-            updatedRow[15] = updatedRow[15]?.trim() || "Sans technicien";
+  // Création d'un FileReader pour lire le fichier Excel
+  const reader = new FileReader();
+  
+  reader.onload = (e: ProgressEvent<FileReader>) => {
+    try {
+      // Lecture du fichier Excel
+      const data = e.target?.result;
+      const workbook = XLSX.read(data, { type: 'binary' });
+      
+      // Récupération de la première feuille
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      // Conversion en tableau
+      const excelData = XLSX.utils.sheet_to_json<string[]>(worksheet, {
+        header: 1,
+        defval: ''
+      });
 
-            // Correction des dates
-            if (updatedRow[2] && updatedRow[4]) {
-              // Date de début
-              const startDate = new Date(updatedRow[2]);
-              startDate.setHours(12, 0, 0, 0);
-              updatedRow[2] = startDate.toISOString().split('T')[0];
+      // Séparation des en-têtes et des données
+      const headers = excelData[0] as string[];
+      const processedData = excelData.slice(1)
+        .filter((row: any[]) => row.some(cell => cell)) // Suppression des lignes vides
+        .map((row: any[]) => {
+          // S'assurer que toutes les lignes ont le même nombre de colonnes
+          const normalizedRow = [...Array(headers.length)].map((_, index) => 
+            row[index]?.toString() || ''
+          );
+          
+          // Traitement spécifique pour certaines colonnes
+          normalizedRow[15] = normalizedRow[15]?.trim() || "Sans technicien";
 
-              // Date de fin
-              const endDate = new Date(updatedRow[4]);
-              endDate.setHours(12, 0, 0, 0);
-              updatedRow[4] = endDate.toISOString().split('T')[0];
+          // Correction des dates
+          if (normalizedRow[2] && normalizedRow[4]) {
+            // Conversion des dates Excel en dates JavaScript
+            let startDate = new Date(normalizedRow[2]);
+            if (isNaN(startDate.getTime())) {
+              // Si la date n'est pas valide, essayer de la parser depuis le format Excel
+              startDate = XLSX.SSF.parse_date_code(normalizedRow[2]) || new Date();
             }
-            return updatedRow;
-          });
+            startDate.setHours(12, 0, 0, 0);
+            normalizedRow[2] = startDate.toISOString().split('T')[0];
 
-        setData(processedData);
-        setHeaders(results.data[0]);
-
-        // Trouver la plage de dates et générer toutes les dates
-        const { start, end } = findDateRange(processedData);
-        const allDates = generateAllDatesInRange(start, end);
-        setUniqueDates(allDates);
-
-        // Mise à jour des techniciens
-        const technicianSet = new Set<string>();
-        processedData.forEach((row: string[]) => {
-          if (row[15]) {
-            technicianSet.add(row[15].trim());
+            let endDate = new Date(normalizedRow[4]);
+            if (isNaN(endDate.getTime())) {
+              endDate = XLSX.SSF.parse_date_code(normalizedRow[4]) || new Date();
+            }
+            endDate.setHours(12, 0, 0, 0);
+            normalizedRow[4] = endDate.toISOString().split('T')[0];
           }
+
+          return normalizedRow;
         });
 
-        const sortedTechnicians = Array.from(technicianSet)
-          .filter(tech => tech && tech !== "Sans technicien")
-          .sort((a, b) => a.localeCompare(b));
+      // Mise à jour des états
+      setData(processedData);
+      setHeaders(headers);
 
-        if (technicianSet.has("Sans technicien")) {
-          sortedTechnicians.push("Sans technicien");
+      // Trouver la plage de dates et générer toutes les dates
+      const { start, end } = findDateRange(processedData);
+      const allDates = generateAllDatesInRange(start, end);
+      setUniqueDates(allDates);
+
+      // Mise à jour des techniciens
+      const technicianSet = new Set<string>();
+      processedData.forEach((row: string[]) => {
+        if (row[15]) {
+          technicianSet.add(row[15].trim());
         }
+      });
 
-        setAllTechnicians(sortedTechnicians);
-      },
-      error: (error: Error) => {
-        console.error('Erreur lors de la lecture du fichier:', error);
+      const sortedTechnicians = Array.from(technicianSet)
+        .filter(tech => tech && tech !== "Sans technicien")
+        .sort((a, b) => a.localeCompare(b));
+
+      if (technicianSet.has("Sans technicien")) {
+        sortedTechnicians.push("Sans technicien");
       }
-    });
+
+      setAllTechnicians(sortedTechnicians);
+
+    } catch (error) {
+      console.error('Erreur lors de la lecture du fichier Excel:', error);
+    }
   };
+
+  reader.onerror = (error) => {
+    console.error('Erreur lors de la lecture du fichier:', error);
+  };
+
+  // Lecture du fichier comme binary string
+  reader.readAsBinaryString(file);
+};
 
   const handleExportExcel = (): void => {
     const dataToExport = (isFiltering ? filteredData : data).map(row => {
