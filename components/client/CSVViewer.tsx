@@ -809,9 +809,25 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
     setEditedData({});
   };
 
-  const handleTaskClick = (operationId: string): void => {
-    setSelectedTask(prevTask => prevTask === operationId ? null : operationId);
-  };
+const handleTaskClick = (operationId: string): void => {
+  // Vérifier si nous avons déjà des données filtrées pour cette opération
+  const existingFilteredData = filterDataForDate(selectedDate, operationId);
+  
+  setSelectedTask(prevTask => {
+    // Si on clique sur la même tâche, on désélectionne
+    if (prevTask === operationId) {
+      return null;
+    }
+    
+    // Si les données filtrées sont vides ou si on a déjà plus d'une occurrence
+    // on ne devrait pas sélectionner cette tâche
+    if (!existingFilteredData.length || existingFilteredData.length > 1) {
+      return prevTask;
+    }
+    
+    return operationId;
+  });
+};
 
   // Gestion des colonnes
   const handleColumnVisibilityChange = (columnIndex: number): void => {
