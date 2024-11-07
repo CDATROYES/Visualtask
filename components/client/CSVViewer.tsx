@@ -371,38 +371,44 @@ const generateDateRange = (start: Date, end: Date): string[] => {
     
     return updatedTask;
   };
-  const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
-    if (!dateStr || !data.length) return [];
+// Modification du filterDataForDate pour éviter les doublons
+const filterDataForDate = useCallback((dateStr: string, operationId: string | null = null): string[][] => {
+  if (!dateStr || !data.length) return [];
 
-    try {
-      const dateObj = new Date(dateStr);
-      dateObj.setUTCHours(0, 0, 0, 0);
+  try {
+    const dateObj = new Date(dateStr);
+    dateObj.setUTCHours(0, 0, 0, 0);
 
-      let filteredByDate = data.filter((row: string[]) => {
-        if (operationId) {
-          return getOperationId(row) === operationId;
-        }
-
-        if (!row[2] || !row[4]) return false;
-
-        try {
-          const startDate = new Date(row[2]);
-          startDate.setUTCHours(0, 0, 0, 0);
-          const endDate = new Date(row[4]);
-          endDate.setUTCHours(23, 59, 59, 999);
-          return startDate <= dateObj && dateObj <= endDate;
-        } catch (err) {
-          console.error('Erreur lors du filtrage des dates:', err);
-          return false;
-        }
-      });
-
-      return filteredByDate;
-    } catch (err) {
-      console.error('Erreur lors du filtrage des données:', err);
-      return [];
+    // Si on cherche une opération spécifique, on ne retourne que la première occurrence
+    if (operationId) {
+      const matchingRows = data.filter((row: string[]) => 
+        getOperationId(row) === operationId
+      );
+      // Ne retourner que la première occurrence trouvée
+      return matchingRows.slice(0, 1);
     }
-  }, [data]);
+
+    // Pour les autres cas, filtrer normalement par date
+    return data.filter((row: string[]) => {
+      if (!row[2] || !row[4]) return false;
+
+      try {
+        const startDate = new Date(row[2]);
+        startDate.setUTCHours(0, 0, 0, 0);
+        const endDate = new Date(row[4]);
+        endDate.setUTCHours(23, 59, 59, 999);
+        return startDate <= dateObj && dateObj <= endDate;
+      } catch (err) {
+        console.error('Erreur lors du filtrage des dates:', err);
+        return false;
+      }
+    });
+  } catch (err) {
+    console.error('Erreur lors du filtrage des données:', err);
+    return [];
+  }
+}, [data]);
+
 
   const groupDataByType = useCallback((groupBy: string, filteredDataForDate: string[][]): GroupData => {
     let groupIndex: number;
@@ -1165,112 +1171,160 @@ const handleCreateOperation = (): void => {
       </div>
     );
   };
-  const renderTable = (dataToRender: string[][]): React.ReactNode => {
-    const visibleColumns = getVisibleColumns();
-    
-    return (
-      <div className="w-full">
-        <div className="w-full overflow-x-auto">
-          <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-            <thead>
-              <tr>
-                <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
-                  Actions
-                </th>
-                {headers.map((header, index) => {
-                  if (!visibleColumns.includes(index)) return null;
-                  
-                  return (
-                    <th
-                      key={index}
-                      className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className="truncate">{header}</span>
-                        {isFiltering && (
-                          <input
-                            type="text"
-                            value={filters[header] || ''}
-                            onChange={(e) => handleFilterChange(header, e.target.value)}
-                            placeholder={`Filtrer ${header}`}
-                            className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
-                          />
-                        )}
-                      </div>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody className="bg-white">
-              {dataToRender.map((row, rowIndex) => {
-                const operationId = getOperationId(row);
-                const isEditing = editingRow === operationId;
-                const isUnassigned = !row[2] || !row[4];
-
+ const renderTable = (dataToRender: string[][]): React.ReactNode => {
+  const visibleColumns = getVisibleColumns();
+  
+  return (
+    <div className="w-full">
+      <div className="w-full overflow-x-auto">
+        <table className="min-w-full border border-gray-300" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+          <thead>
+            <tr>
+              <th className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600">
+                Actions
+              </th>
+              {headers.map((header, index) => {
+                // Ne rendre que les colonnes visibles
+                if (!visibleColumns.includes(index)) return null;
+                
                 return (
-                  <tr
-                    key={operationId}
-                    className={`
-                      ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
-                      ${isEditing ? 'bg-yellow-50' : ''}
-                      ${isUnassigned ? 'bg-yellow-50' : ''}
-                      hover:bg-blue-50
-                    `}
+                  <th
+                    key={`header-${index}`}
+                    className="sticky top-0 bg-gray-800 text-white py-3 px-4 text-left text-xs font-medium border border-gray-600"
                   >
-                    <td className="border border-gray-300 py-2 px-4">
-                      <div className="flex justify-center gap-2">
-                        {isEditing ? (
-                          <>
-                            <button
-                              onClick={() => handleSaveEdit(operationId)}
-                              className="bg-green-500 text-white p-1 rounded hover:bg-green-600"
-                              title="Enregistrer"
-                            >
-                              <Save className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              className="bg-red-500 text-white p-1 rounded hover:bg-red-600"
-                              title="Annuler"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handleEditClick(row)}
-                            className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600"
-                            title="Modifier"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                    {row.map((cell, cellIndex) => {
-                      if (!visibleColumns.includes(cellIndex)) return null;
-                      
-                      return (
-                        <td
-                          key={cellIndex}
-                          className="border border-gray-300 py-2 px-4 text-sm"
-                        >
-                          <div className="truncate">
-                            {renderCell(row, cell, headers[cellIndex], cellIndex)}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
+                    <div className="flex flex-col gap-1">
+                      <span className="truncate">{header}</span>
+                      {isFiltering && (
+                        <input
+                          type="text"
+                          value={filters[header] || ''}
+                          onChange={(e) => handleFilterChange(header, e.target.value)}
+                          placeholder={`Filtrer ${header}`}
+                          className="w-full mt-1 p-1 text-sm border rounded bg-white text-gray-800"
+                        />
+                      )}
+                    </div>
+                  </th>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {dataToRender.map((row, rowIndex) => {
+              const operationId = getOperationId(row);
+              const uniqueRowId = `${operationId}_${rowIndex}`;
+              const isEditing = editingRow === operationId;
+              const isUnassigned = !row[2] || !row[4];
+              const isTechnicianMissing = !row[15] || row[15] === "Sans technicien";
+
+              return (
+                <tr
+                  key={uniqueRowId}
+                  className={`
+                    ${rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                    ${isEditing ? 'bg-yellow-50' : ''}
+                    ${isUnassigned ? 'bg-yellow-50' : ''}
+                    ${isTechnicianMissing ? 'text-red-500' : ''}
+                    hover:bg-blue-50 transition-colors duration-150
+                  `}
+                  onClick={() => !isEditing && handleTaskClick(operationId)}
+                >
+                  <td className="border border-gray-300 py-2 px-4">
+                    <div className="flex justify-center gap-2">
+                      {isEditing ? (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSaveEdit(operationId);
+                            }}
+                            className="bg-green-500 text-white p-1 rounded hover:bg-green-600 transition-colors duration-150"
+                            title="Enregistrer"
+                          >
+                            <Save className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancelEdit();
+                            }}
+                            className="bg-red-500 text-white p-1 rounded hover:bg-red-600 transition-colors duration-150"
+                            title="Annuler"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClick(row);
+                          }}
+                          className="bg-blue-500 text-white p-1 rounded hover:bg-blue-600 transition-colors duration-150"
+                          title="Modifier"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  {row.map((cell, cellIndex) => {
+                    if (!visibleColumns.includes(cellIndex)) return null;
+                    
+                    const isDateCell = headers[cellIndex]?.toLowerCase().includes('date');
+                    const isTimeCell = headers[cellIndex]?.toLowerCase().includes('heure');
+                    
+                    return (
+                      <td
+                        key={`${uniqueRowId}-cell-${cellIndex}`}
+                        className={`
+                          border border-gray-300 py-2 px-4 text-sm
+                          ${isEditing ? 'p-0' : ''}
+                        `}
+                      >
+                        <div className="truncate">
+                          {isEditing ? (
+                            isDateCell ? (
+                              <input
+                                type="date"
+                                value={editedData[headers[cellIndex]] || ''}
+                                onChange={(e) => handleInputChange(headers[cellIndex], e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full p-1 border rounded"
+                              />
+                            ) : isTimeCell ? (
+                              <input
+                                type="time"
+                                value={editedData[headers[cellIndex]] || ''}
+                                onChange={(e) => handleInputChange(headers[cellIndex], e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full p-1 border rounded"
+                              />
+                            ) : (
+                              <input
+                                type="text"
+                                value={editedData[headers[cellIndex]] || ''}
+                                onChange={(e) => handleInputChange(headers[cellIndex], e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full p-1 border rounded"
+                              />
+                            )
+                          ) : (
+                            cell || ''
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   const renderGanttView = (groupBy: string, showTechnicianInput: boolean = false): React.ReactNode => {
     return (
