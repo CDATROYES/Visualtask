@@ -472,7 +472,53 @@ const convertSpecialDateFormat = (dateStr: string): string => {
   return dateStr;
 };
 
-// Modification du handleFileUpload pour utiliser la nouvelle fonction
+// Fonction pour convertir un nombre Excel en date
+const convertExcelDate = (excelDate: number | string): string => {
+  if (!excelDate) return '';
+  
+  try {
+    // Convertir en nombre si c'est une chaîne
+    const numericDate = typeof excelDate === 'string' ? parseInt(excelDate, 10) : excelDate;
+    
+    // Conversion du nombre Excel en date JavaScript
+    // Excel utilise le 1er janvier 1900 comme date de référence
+    // et compte le nombre de jours depuis cette date
+    const dateObj = new Date((numericDate - 25569) * 86400 * 1000);
+    dateObj.setHours(12, 0, 0, 0);
+    
+    // Format YYYY-MM-DD
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  } catch (err) {
+    console.error('Erreur lors de la conversion de la date Excel:', err);
+    return '';
+  }
+};
+
+// Fonction pour convertir une heure décimale Excel en format HH:mm
+const convertExcelTime = (excelTime: number | string): string => {
+  if (!excelTime) return '';
+  
+  try {
+    // Convertir en nombre si c'est une chaîne
+    const numericTime = typeof excelTime === 'string' ? parseFloat(excelTime) : excelTime;
+    
+    // Convertir le temps décimal en heures et minutes
+    const totalMinutes = Math.round(numericTime * 24 * 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    
+    // Format HH:mm
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  } catch (err) {
+    console.error('Erreur lors de la conversion de l\'heure Excel:', err);
+    return '';
+  }
+};
+
 const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -486,8 +532,8 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
       
-      // Conversion en tableau avec les options raw: true pour obtenir les valeurs brutes
-      const excelData = XLSX.utils.sheet_to_json<string[]>(worksheet, {
+      // Conversion en tableau avec les valeurs brutes
+      const excelData = XLSX.utils.sheet_to_json<any[]>(worksheet, {
         header: 1,
         defval: '',
         raw: true
@@ -497,24 +543,29 @@ const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>): void => {
       const processedData = excelData.slice(1)
         .filter((row: any[]) => row.some(cell => cell))
         .map((row: any[]) => {
-          const normalizedRow = [...Array(headers.length)].map((_, index) => 
-            row[index]?.toString() || ''
-          );
+          const normalizedRow = [...Array(headers.length)].map((_, index) => {
+            const value = row[index];
+            
+            // Traitement des dates (colonnes 2 et 4 - index commençant à 0)
+            if (index === 2 || index === 4) {
+              return convertExcelDate(value);
+            }
+            
+            // Traitement des heures (colonnes 3 et 5)
+            if (index === 3 || index === 5) {
+              return convertExcelTime(value);
+            }
+            
+            // Autres colonnes
+            return value?.toString() || '';
+          });
           
+          // Traitement spécial pour la colonne des techniciens
           normalizedRow[15] = normalizedRow[15]?.trim() || "Sans technicien";
-
-          // Conversion des dates spéciales
-          if (normalizedRow[2]) {
-            normalizedRow[2] = convertSpecialDateFormat(normalizedRow[2]);
-          }
-          if (normalizedRow[4]) {
-            normalizedRow[4] = convertSpecialDateFormat(normalizedRow[4]);
-          }
-
+          
           return normalizedRow;
         });
 
-      // Mise à jour des états
       setData(processedData);
       setHeaders(headers);
 
