@@ -140,7 +140,7 @@ const findDateRange = (data: string[][]): { start: Date, end: Date } => {
   }
 
   // Étendre la plage de dates d'une semaine avant et après
-  minDate.setDate(minDate.getDate() - 7);
+  minDate.setDate(minDate.getDate() - 0);
   maxDate.setDate(maxDate.getDate() + 7);
 
   return { start: minDate, end: maxDate };
